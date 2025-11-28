@@ -1,0 +1,23 @@
+{
+  "provider": "sendgrid",
+  "sendgrid": {
+    "api_key_env": "SENDGRID_API_KEY",
+    "from_email": "harikrish656@gmail.com",
+    "from_name": "Groww Review Analyser"
+  },
+  "stakeholders": [
+    "harikrish656@gmail.com"
+  ],
+  "schedule": {
+    "enabled": true,
+    "day_of_week": "monday",
+    "hour": 9,
+    "minute": 0,
+    "timezone": "Asia/Kolkata"
+  },
+  "retry": {
+    "max_attempts": 3,
+    "delay_seconds": 60
+  }
+}
+

@@ -1,0 +1,110 @@
+{
+  "version": "1.0.0",
+  "themes": [
+    {
+      "id": "trading_execution",
+      "name": "Trading & Order Execution Issues",
+      "description": "Unreliable trade execution and transaction flows: orders often fail, hang, or time out, and missing order types or delayed settlements cause frustration and losses. Users report buy/sell orders not completing, errors on exit, and IPO/allotment check problems. These failures directly impact investors' ability to trade effectively.",
+      "keywords": [
+        "order", "execute", "execution", "trade", "trading", "buy", "sell",
+        "exit", "position", "pending", "failed", "timeout", "hang", "stuck",
+        "intraday", "F&O", "FnO", "settlement", "IPO", "allotment",
+        "GTT", "stop loss", "target", "limit order", "market order"
+      ],
+      "example_quotes": [
+        "sell order is not executing... still shows error.",
+        "When placing order in intraday it place order really late and sometimes even after 20 mins order pending"
+      ],
+      "sentiment_indicators": {
+        "negative": ["failed", "not executing", "pending", "error", "loss", "missed profit"],
+        "positive": ["fast execution", "smooth trading", "order executed"]
+      }
+    },
+    {
+      "id": "app_performance",
+      "name": "App Performance & Stability",
+      "description": "Frequent app glitches and crashes undermine reliability. Slow loading and data errors frustrate users; for example, charts or quotes lag or reset unexpectedly. Some users note the app otherwise runs smoothly, but many encounter intermittent bugs that erode confidence.",
+      "keywords": [
+        "crash", "glitch", "bug", "slow", "lag", "freeze", "hang",
+        "loading", "refresh", "error", "not working", "stuck",
+        "chart", "data", "price", "update", "sync", "network",
+        "performance", "stability", "reliable", "smooth"
+      ],
+      "example_quotes": [
+        "Too much glitch, option chain not open properly... sometimes working, sometimes not working.",
+        "App crashes every time I try to view my portfolio"
+      ],
+      "sentiment_indicators": {
+        "negative": ["crash", "glitch", "slow", "not working", "bug", "freeze"],
+        "positive": ["smooth", "fast", "reliable", "works well", "no issues"]
+      }
+    },
+    {
+      "id": "fees_charges",
+      "name": "Fees & Charges Transparency",
+      "description": "Unexpected brokerage and hidden fees frustrate users by eating into profits. Many complain that nominal-sounding charges add up: e.g. a small trade yields far less profit after 'high brokerage' and undisclosed fees. Users demand clearer pricing, lower commissions, and disclosure of all deductions.",
+      "keywords": [
+        "charge", "charges", "fee", "fees", "brokerage", "commission",
+        "expensive", "costly", "deduct", "deduction", "hidden",
+        "DP charge", "STT", "GST", "tax", "profit", "loss",
+        "free", "zero brokerage", "pricing", "cost"
+      ],
+      "example_quotes": [
+        "worst app ever... very high brokerage.. and hidden charges.. in 7k profit I got only 940 rs.",
+        "brokerage is a nightmare for scalpers. sometimes even if I am in profit, at the end of the day i end up paying money"
+      ],
+      "sentiment_indicators": {
+        "negative": ["high charge", "hidden fees", "expensive", "deducted", "too much"],
+        "positive": ["free", "low cost", "reasonable", "no charges", "zero brokerage"]
+      }
+    },
+    {
+      "id": "ui_usability",
+      "name": "User Interface & Usability",
+      "description": "Generally praised for a clean, intuitive design and easy onboarding, but some users report cluttered screens, unnecessary taps, and confusing navigation. For example, the default landing page may require extra scrolling to reach a watchlist. These UX issues slow users down and cause annoyance despite an otherwise user-friendly layout.",
+      "keywords": [
+        "UI", "UX", "interface", "design", "layout", "screen",
+        "navigation", "navigate", "easy", "simple", "intuitive",
+        "confusing", "cluttered", "scroll", "tap", "click",
+        "feature", "option", "button", "menu", "watchlist",
+        "beginner", "user-friendly", "clean"
+      ],
+      "example_quotes": [
+        "UI is third class compared to all apps... many unnecessary screens... UI must need to improve.",
+        "Very user-friendly interface great for beginners"
+      ],
+      "sentiment_indicators": {
+        "negative": ["confusing", "cluttered", "difficult", "hard to use", "poor design"],
+        "positive": ["easy", "simple", "intuitive", "clean", "user-friendly", "smooth"]
+      }
+    },
+    {
+      "id": "customer_support",
+      "name": "Customer Support & Service",
+      "description": "Complaints of unresponsive or inefficient support recur. Calls and tickets often go unanswered or delayed, leaving users frustrated and undermining trust. Reviewers say they feel 'harassed' by lack of help when problems arise. Poor support for issues like failed trades or refunds is a major concern driving negative sentiment.",
+      "keywords": [
+        "support", "customer service", "customer care", "help", "response",
+        "ticket", "call", "chat", "contact", "resolve", "solution",
+        "waiting", "queue", "agent", "representative",
+        "refund", "complaint", "issue", "problem"
+      ],
+      "example_quotes": [
+        "Guys your customer service is sooo worst... not even a single call is connected... I'm harassed... no solution.",
+        "Support resolved my issue in under 2 hours!"
+      ],
+      "sentiment_indicators": {
+        "negative": ["no response", "worst support", "unresponsive", "waiting", "no help"],
+        "positive": ["responsive", "helpful", "resolved", "quick response", "good support"]
+      }
+    }
+  ],
+  "classification_rules": {
+    "confidence_threshold": 0.6,
+    "allow_multiple_themes": false,
+    "default_theme": null,
+    "prioritize_by_keyword_match": true
+  },
+  "validation_status": "user_approved",
+  "last_updated": "2025-11-26"
+}
+

@@ -1,0 +1,166 @@
+{
+  "sample_embeddings": {
+    "description": "Sample 384-dimensional embeddings (all-MiniLM-L6-v2) for testing",
+    "dimensions": 384,
+    "count": 20
+  },
+  "sample_clusters": {
+    "description": "Sample cluster labels for 20 reviews",
+    "labels": [0, 0, 0, 1, 1, 1, 2, 2, -1, -1, 0, 0, 1, 2, 2, -1, 0, 1, 2, -1],
+    "n_clusters": 3,
+    "n_noise": 4,
+    "cluster_sizes": {
+      "0": 5,
+      "1": 4,
+      "2": 4
+    }
+  },
+  "sample_reviews": [
+    {
+      "id": "gp_test_001",
+      "text": "The app crashes frequently when I try to view my portfolio. This is very frustrating and I cannot track my investments properly.",
+      "rating": 1,
+      "helpful_count": 45,
+      "timestamp": "2025-11-20T10:00:00"
+    },
+    {
+      "id": "gp_test_002",
+      "text": "App is very slow and freezes often. The performance needs improvement. Loading times are terrible.",
+      "rating": 2,
+      "helpful_count": 32,
+      "timestamp": "2025-11-19T10:00:00"
+    },
+    {
+      "id": "gp_test_003",
+      "text": "Too many bugs and glitches. The app crashes when I try to place an order. Very unreliable.",
+      "rating": 1,
+      "helpful_count": 28,
+      "timestamp": "2025-11-18T10:00:00"
+    },
+    {
+      "id": "gp_test_004",
+      "text": "Customer support is non-existent. No one responds to my emails or calls. Very poor service.",
+      "rating": 1,
+      "helpful_count": 67,
+      "timestamp": "2025-11-17T10:00:00"
+    },
+    {
+      "id": "gp_test_005",
+      "text": "Support team never answers. I've been waiting for a week for help with my account issue.",
+      "rating": 2,
+      "helpful_count": 41,
+      "timestamp": "2025-11-16T10:00:00"
+    },
+    {
+      "id": "gp_test_006",
+      "text": "Terrible customer service. No response to tickets. I feel ignored and frustrated.",
+      "rating": 1,
+      "helpful_count": 53,
+      "timestamp": "2025-11-15T10:00:00"
+    },
+    {
+      "id": "gp_test_007",
+      "text": "The UI is confusing and hard to navigate. Too many unnecessary screens. Design needs improvement.",
+      "rating": 2,
+      "helpful_count": 29,
+      "timestamp": "2025-11-14T10:00:00"
+    },
+    {
+      "id": "gp_test_008",
+      "text": "User interface is cluttered and not intuitive. Hard to find what I need. Navigation is poor.",
+      "rating": 3,
+      "helpful_count": 18,
+      "timestamp": "2025-11-13T10:00:00"
+    },
+    {
+      "id": "gp_test_009",
+      "text": "Great app overall. Easy to use and reliable.",
+      "rating": 5,
+      "helpful_count": 5,
+      "timestamp": "2025-11-12T10:00:00"
+    },
+    {
+      "id": "gp_test_010",
+      "text": "Nice app.",
+      "rating": 4,
+      "helpful_count": 2,
+      "timestamp": "2025-11-11T10:00:00"
+    },
+    {
+      "id": "gp_test_011",
+      "text": "App performance is terrible. Crashes every time I open it. Very buggy and unstable.",
+      "rating": 1,
+      "helpful_count": 39,
+      "timestamp": "2025-11-10T10:00:00"
+    },
+    {
+      "id": "gp_test_012",
+      "text": "Slow loading and frequent crashes. The app needs better performance optimization.",
+      "rating": 2,
+      "helpful_count": 24,
+      "timestamp": "2025-11-09T10:00:00"
+    },
+    {
+      "id": "gp_test_013",
+      "text": "Customer support takes forever to respond. Very disappointed with the service quality.",
+      "rating": 2,
+      "helpful_count": 36,
+      "timestamp": "2025-11-08T10:00:00"
+    },
+    {
+      "id": "gp_test_014",
+      "text": "The interface design is outdated and confusing. Too many clicks to reach basic features.",
+      "rating": 2,
+      "helpful_count": 22,
+      "timestamp": "2025-11-07T10:00:00"
+    },
+    {
+      "id": "gp_test_015",
+      "text": "UI needs major improvements. Navigation is poor and the layout is cluttered.",
+      "rating": 3,
+      "helpful_count": 15,
+      "timestamp": "2025-11-06T10:00:00"
+    },
+    {
+      "id": "gp_test_016",
+      "text": "Good app.",
+      "rating": 4,
+      "helpful_count": 1,
+      "timestamp": "2025-11-05T10:00:00"
+    },
+    {
+      "id": "gp_test_017",
+      "text": "App crashes constantly. Performance is awful. Needs urgent bug fixes.",
+      "rating": 1,
+      "helpful_count": 48,
+      "timestamp": "2025-11-04T10:00:00"
+    },
+    {
+      "id": "gp_test_018",
+      "text": "Support is unresponsive. No help when I need it most. Very poor customer service.",
+      "rating": 1,
+      "helpful_count": 56,
+      "timestamp": "2025-11-03T10:00:00"
+    },
+    {
+      "id": "gp_test_019",
+      "text": "User interface could be better. Too many unnecessary steps to complete simple tasks.",
+      "rating": 3,
+      "helpful_count": 12,
+      "timestamp": "2025-11-02T10:00:00"
+    },
+    {
+      "id": "gp_test_020",
+      "text": "OK.",
+      "rating": 3,
+      "helpful_count": 0,
+      "timestamp": "2025-11-01T10:00:00"
+    }
+  ],
+  "expected_themes": {
+    "0": "app_performance",
+    "1": "customer_support",
+    "2": "user_interface"
+  }
+}
+

@@ -1,0 +1,65 @@
+You are an expert in analyzing app store reviews and identifying themes. Your task is to validate and provide feedback on the following theme definitions for classifying Groww app reviews.
+
+## Theme Definitions
+
+{% for theme in themes %}
+### Theme {{ loop.index }}: {{ theme.name }}
+**ID:** {{ theme.id }}
+**Description:** {{ theme.description }}
+**Keywords:** {{ theme.keywords|join(', ') }}
+**Example Quotes:**
+{% for quote in theme.example_quotes %}
+- "{{ quote }}"
+{% endfor %}
+
+{% endfor %}
+
+## Your Task
+
+Please review these theme definitions and provide:
+
+1. **Validation**: Are these themes:
+   - Mutually exclusive (no overlap)?
+   - Comprehensive (cover most review types)?
+   - Clear and actionable?
+
+2. **Suggestions**: Provide specific improvements:
+   - Missing keywords that should be added
+   - Overlapping themes that should be merged or clarified
+   - Any themes that should be split into separate themes
+   - Better descriptions or examples
+
+3. **Confidence**: Rate your confidence in these themes (1-10) for accurately classifying reviews.
+
+## Output Format
+
+Please respond in JSON format:
+
+```json
+{
+  "validation": {
+    "mutually_exclusive": true/false,
+    "comprehensive": true/false,
+    "clear": true/false,
+    "overall_score": 8.5
+  },
+  "suggestions": [
+    {
+      "theme_id": "trading_execution",
+      "type": "add_keywords|merge|split|clarify",
+      "recommendation": "Specific recommendation text",
+      "priority": "high|medium|low"
+    }
+  ],
+  "missing_themes": [
+    {
+      "name": "Theme name",
+      "description": "Why this theme is needed",
+      "keywords": ["keyword1", "keyword2"]
+    }
+  ],
+  "confidence_score": 8.5,
+  "summary": "Overall assessment and key recommendations"
+}
+```
+

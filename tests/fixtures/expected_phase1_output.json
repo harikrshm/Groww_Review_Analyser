@@ -1,0 +1,175 @@
+{
+  "_description": "Expected Phase 1 output format for validation. This shows what the pipeline should produce.",
+  
+  "metadata": {
+    "app_name": "Groww",
+    "app_ids": {
+      "google_play": "com.nextbillion.groww",
+      "apple_store": "1404871703"
+    },
+    "scrape_timestamp": "2025-11-26T10:30:00Z",
+    "date_range": {
+      "start": "2025-09-02T00:00:00Z",
+      "end": "2025-11-25T23:59:59Z",
+      "weeks_covered": 12
+    },
+    "processing": {
+      "total_scraped": 500,
+      "after_junk_filter": 365,
+      "after_deduplication": 342,
+      "final_count": 200
+    },
+    "version": "1.0.0"
+  },
+  
+  "statistics": {
+    "total_reviews": 200,
+    "by_source": {
+      "google_play": 105,
+      "apple_store": 95
+    },
+    "by_rating": {
+      "1": 40,
+      "2": 40,
+      "3": 40,
+      "4": 40,
+      "5": 40
+    },
+    "by_rating_group": {
+      "positive": 80,
+      "neutral": 40,
+      "negative": 80
+    },
+    "by_week": {
+      "2025-W47": 18,
+      "2025-W46": 17,
+      "2025-W45": 16,
+      "2025-W44": 19,
+      "2025-W43": 15,
+      "2025-W42": 18,
+      "2025-W41": 14,
+      "2025-W40": 17,
+      "2025-W39": 16,
+      "2025-W38": 18,
+      "2025-W37": 17,
+      "2025-W36": 15
+    },
+    "average_rating": 3.0
+  },
+  
+  "weeks": [
+    {
+      "week_id": "2025-W47",
+      "week_offset": 0,
+      "label": "Current Week",
+      "start_date": "2025-11-17",
+      "end_date": "2025-11-23",
+      "review_count": 18,
+      "rating_distribution": {"1": 4, "2": 3, "3": 4, "4": 3, "5": 4}
+    },
+    {
+      "week_id": "2025-W46",
+      "week_offset": -1,
+      "label": "Week -1",
+      "start_date": "2025-11-10",
+      "end_date": "2025-11-16",
+      "review_count": 17,
+      "rating_distribution": {"1": 3, "2": 4, "3": 3, "4": 4, "5": 3}
+    },
+    {
+      "week_id": "2025-W45",
+      "week_offset": -2,
+      "label": "Week -2",
+      "start_date": "2025-11-03",
+      "end_date": "2025-11-09",
+      "review_count": 16,
+      "rating_distribution": {"1": 3, "2": 3, "3": 4, "4": 3, "5": 3}
+    },
+    {
+      "week_id": "2025-W44",
+      "week_offset": -3,
+      "label": "Week -3",
+      "start_date": "2025-10-27",
+      "end_date": "2025-11-02",
+      "review_count": 19,
+      "rating_distribution": {"1": 4, "2": 4, "3": 3, "4": 4, "5": 4}
+    }
+  ],
+  
+  "reviews": [
+    {
+      "id": "gp_abc123def456",
+      "source": "google_play",
+      "rating": 5,
+      "rating_group": "positive",
+      "text": "This is a great app for investing! Easy to use and understand. The interface is clean and the charts are very helpful for tracking investments. Highly recommend for beginners who want to start their investment journey.",
+      "timestamp": "2025-11-20T14:30:00Z",
+      "week_id": "2025-W47",
+      "author_hash": "a1b2c3d4",
+      "char_count": 221,
+      "word_count": 38
+    },
+    {
+      "id": "gp_xyz789ghi012",
+      "source": "google_play",
+      "rating": 1,
+      "rating_group": "negative",
+      "text": "App crashes frequently when I try to view my portfolio. This has been happening for the past week and it's very frustrating. I cannot track my investments properly. Please fix this critical issue urgently.",
+      "timestamp": "2025-11-19T09:15:00Z",
+      "week_id": "2025-W47",
+      "author_hash": "e5f6g7h8",
+      "char_count": 206,
+      "word_count": 37
+    },
+    {
+      "id": "as_jkl345mno678",
+      "source": "apple_store",
+      "rating": 4,
+      "rating_group": "positive",
+      "text": "Pretty Good. Good app with clean interface. Easy to track portfolio and make investments. Some minor issues with notifications not working sometimes but overall a solid experience for daily use.",
+      "timestamp": "2025-11-18T09:45:00Z",
+      "week_id": "2025-W47",
+      "author_hash": "i9j0k1l2",
+      "char_count": 194,
+      "word_count": 32
+    },
+    {
+      "id": "as_pqr901stu234",
+      "source": "apple_store", 
+      "rating": 2,
+      "rating_group": "negative",
+      "text": "Disappointed. The app is slow and the UI is confusing. I expected better from such a popular app. Many features don't work properly on my iPhone 13 Pro. Needs significant improvement in performance.",
+      "timestamp": "2025-11-19T14:30:00Z",
+      "week_id": "2025-W47",
+      "author_hash": "m3n4o5p6",
+      "char_count": 198,
+      "word_count": 35
+    },
+    {
+      "id": "gp_vwx567yza890",
+      "source": "google_play",
+      "rating": 3,
+      "rating_group": "neutral",
+      "text": "Decent app overall. Does what it's supposed to do but nothing extraordinary. Some features are good while others need improvement. The mutual fund section is well designed but stocks could be better organized.",
+      "timestamp": "2025-11-18T16:45:00Z",
+      "week_id": "2025-W47",
+      "author_hash": "q7r8s9t0",
+      "char_count": 208,
+      "word_count": 35
+    }
+  ],
+  
+  "_validation_rules": {
+    "all_reviews_have_timestamp": true,
+    "all_reviews_min_100_chars": true,
+    "all_ratings_have_min_40_reviews": true,
+    "no_pii_in_author_field": true,
+    "week_id_format": "YYYY-Www",
+    "rating_group_mapping": {
+      "1-2": "negative",
+      "3": "neutral", 
+      "4-5": "positive"
+    }
+  }
+}
+

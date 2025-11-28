@@ -1,0 +1,51 @@
+You are an expert at classifying app store reviews into meaningful themes. Your task is to classify the following review into ONE of the provided themes.
+
+## Review to Classify
+
+**Review Text:** {{ review_text }}
+**Rating:** {{ rating }} stars
+**Review ID:** {{ review_id }}
+
+## Available Themes
+
+{% for theme in themes %}
+### {{ theme.name }} (ID: {{ theme.id }})
+**Description:** {{ theme.description }}
+**Keywords:** {{ theme.keywords|join(', ') }}
+**Example Quotes:**
+{% for quote in theme.example_quotes %}
+- "{{ quote }}"
+{% endfor %}
+
+{% endfor %}
+
+## Classification Instructions
+
+1. Read the review text carefully
+2. Identify which theme BEST matches the primary concern or topic
+3. Consider keywords, sentiment, and context
+4. Assign the review to ONE primary theme (most relevant)
+5. Optionally identify a secondary theme if the review touches on multiple topics
+6. Provide a confidence score (0.0-1.0) indicating how certain you are
+
+## Output Format
+
+Respond ONLY with valid JSON (no markdown, no explanation):
+
+```json
+{
+  "theme_id": "trading_execution",
+  "theme_name": "Trading & Order Execution Issues",
+  "confidence": 0.95,
+  "secondary_theme_id": null,
+  "secondary_theme_name": null,
+  "reasoning": "Brief explanation of why this theme was chosen"
+}
+```
+
+**Rules:**
+- `theme_id` must be one of: {% for theme in themes %}{{ theme.id }}{% if not loop.last %}, {% endif %}{% endfor %}
+- `confidence` must be between 0.0 and 1.0
+- `secondary_theme_id` can be null or another theme ID
+- If confidence < 0.5, consider if the review is truly unclassifiable
+

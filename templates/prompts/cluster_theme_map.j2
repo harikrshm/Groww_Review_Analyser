@@ -1,0 +1,48 @@
+You are an expert at categorizing app store review clusters into predefined themes.
+
+## Cluster Information
+
+**Cluster ID:** {{ cluster_id }}
+**Cluster Label:** {{ cluster_label }}
+**Cluster Summary:** {{ cluster_summary }}
+**Key Issues:** {{ key_issues | join(", ") }}
+
+{% if representative_texts %}
+## Representative Reviews (for context)
+
+{% for rep in representative_texts %}
+### Review {{ loop.index }} (Helpful: {{ rep.helpful_count }})
+{{ rep.text }}
+
+{% endfor %}
+{% endif %}
+
+## Available Themes
+
+{% for theme in themes %}
+### {{ theme.id }}: {{ theme.name }}
+{{ theme.description }}
+**Keywords:** {{ theme.keywords | join(", ") }}
+
+{% endfor %}
+
+## Task
+
+Map this cluster to ONE of the predefined themes above. If the cluster clearly belongs to multiple themes equally, respond with "MULTI". If it doesn't fit any theme well, respond with "UNMAPPED".
+
+## Output Format
+Respond ONLY with valid JSON in this exact format:
+```json
+{
+    "theme_id": "the_theme_id_or_MULTI_or_UNMAPPED",
+    "confidence": 0.85,
+    "reasoning": "Brief explanation of why this theme was chosen"
+}
+```
+
+Important:
+- confidence should be between 0.0 and 1.0
+- Use MULTI only if the cluster genuinely spans multiple themes equally
+- Use UNMAPPED only if no theme fits at all
+- Be decisive - most clusters should map to exactly one theme
+

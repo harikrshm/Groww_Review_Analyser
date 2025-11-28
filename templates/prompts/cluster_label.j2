@@ -1,0 +1,31 @@
+You are an expert at analyzing app store reviews. You will be given a set of representative reviews from a cluster of similar reviews.
+
+Your task is to:
+1. Generate a concise LABEL (5-10 words) that captures the main topic/issue
+2. Write a brief SUMMARY (2-3 sentences) describing what users in this cluster are saying
+3. List 2-3 KEY_ISSUES mentioned in these reviews
+
+## Representative Reviews from Cluster {{ cluster_id }}
+
+{% for rep in representatives %}
+### Review {{ loop.index }} (Helpful: {{ rep.helpful_count }})
+{{ rep.text }}
+
+{% endfor %}
+
+## Output Format
+Respond ONLY with valid JSON in this exact format:
+```json
+{
+    "label": "Short descriptive label for this cluster",
+    "summary": "Brief 2-3 sentence summary of what users are experiencing",
+    "key_issues": ["issue1", "issue2", "issue3"]
+}
+```
+
+Important:
+- Do NOT include any PII (names, emails, phone numbers) in your response
+- Focus on the COMMON theme across all reviews
+- Be specific about the issues mentioned
+- Keep the label concise and descriptive
+

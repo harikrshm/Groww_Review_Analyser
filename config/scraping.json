@@ -1,0 +1,60 @@
+{
+  "app_name": "Groww",
+  "app_ids": {
+    "google_play": "com.nextbillion.groww"
+  },
+  "time_range": {
+    "weeks_lookback": 12,
+    "description": "Scrape reviews from the last 12 weeks only"
+  },
+  "filters": {
+    "min_characters": 100,
+    "min_words": 10,
+    "language": "en",
+    "spam_keywords": [
+      "free coins",
+      "hack",
+      "mod apk",
+      "cheat",
+      "generator",
+      "click here",
+      "visit my profile",
+      "download",
+      "http://",
+      "https://",
+      "www."
+    ],
+    "max_repeated_char_ratio": 0.5
+  },
+  "quotas": {
+    "min_reviews_per_rating": 20,
+    "target_total_reviews": 150,
+    "balance_sources": true,
+    "keep_all_above_minimum": true,
+    "ratings": {
+      "1": 20,
+      "2": 20,
+      "3": 20,
+      "4": 20,
+      "5": 20
+    }
+  },
+  "rating_groups": {
+    "positive": [4, 5],
+    "neutral": [3],
+    "negative": [1, 2]
+  },
+  "scraper_settings": {
+    "delay_between_requests_ms": 1000,
+    "max_retries": 3,
+    "timeout_seconds": 30,
+    "batch_size": 100,
+    "use_playwright_fallback": true
+  },
+  "output": {
+    "directory": "data/raw",
+    "filename_prefix": "reviews",
+    "format": "json"
+  }
+}
+

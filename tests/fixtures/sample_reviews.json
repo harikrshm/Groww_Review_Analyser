@@ -1,0 +1,171 @@
+{
+  "google_play_raw": [
+    {
+      "reviewId": "gp_001",
+      "content": "Really disappointed been using the app from almost 8 months initially the app was very good but now its buggy like hell every other day cannot place orders. When placing order in intraday it place order really late and sometimes even after 20 mins order pending and when the place the order already miss on profits. Even today market is open from 15 mins and still can't place new orders really getting in my nerves now. If you guys keep on going like this wont take long for people to move to others",
+      "score": 1,
+      "at": "2025-11-12T14:30:00",
+      "userName": "sampark rana",
+      "thumbsUpCount": 25,
+      "reviewCreatedVersion": "4.5.0"
+    },
+    {
+      "reviewId": "gp_002",
+      "content": "App crashes frequently when I try to view my portfolio. This has been happening for the past week and it's very frustrating. I cannot track my investments properly. Please fix this critical issue urgently.",
+      "score": 1,
+      "at": "2025-11-19T09:15:00",
+      "userName": "Amit Kumar",
+      "thumbsUpCount": 45,
+      "reviewCreatedVersion": "4.5.0"
+    },
+    {
+      "reviewId": "gp_003",
+      "content": "Decent app overall. Does what it's supposed to do but nothing extraordinary. Some features are good while others need improvement. The mutual fund section is well designed but stocks could be better organized.",
+      "score": 3,
+      "at": "2025-11-18T16:45:00",
+      "userName": "Priya Singh",
+      "thumbsUpCount": 12,
+      "reviewCreatedVersion": "4.4.5"
+    },
+    {
+      "reviewId": "gp_004",
+      "content": "Good app with easy to navigate interface. A few minor bugs here and there but nothing major that breaks functionality. Would recommend to friends who are looking to start investing in mutual funds and stocks.",
+      "score": 4,
+      "at": "2025-11-17T11:20:00",
+      "userName": "Vikram Patel",
+      "thumbsUpCount": 8,
+      "reviewCreatedVersion": "4.5.0"
+    },
+    {
+      "reviewId": "gp_005",
+      "content": "Terrible experience with this app. Customer support is non-existent and the app keeps logging me out randomly. Lost money because of bugs in the order execution. Do not recommend this app to anyone who values their investments.",
+      "score": 2,
+      "at": "2025-11-16T08:30:00",
+      "userName": "Sneha Reddy",
+      "thumbsUpCount": 67,
+      "reviewCreatedVersion": "4.4.5"
+    }
+  ],
+  "apple_store_raw": [
+    {
+      "date": "2025-11-20T10:00:00",
+      "rating": 5,
+      "userName": "investor_2025",
+      "review": "Absolutely love this app! Best investment platform I've used. Fast execution, reliable performance, and intuitive design. Customer support is also very responsive when needed.",
+      "title": "Best Investment App",
+      "isEdited": false
+    },
+    {
+      "date": "2025-11-19T14:30:00",
+      "rating": 2,
+      "userName": "frustrated_user",
+      "review": "The app is slow and the UI is confusing. I expected better from such a popular app. Many features don't work properly on my iPhone 13 Pro. Needs significant improvement in performance.",
+      "title": "Disappointed",
+      "isEdited": false
+    },
+    {
+      "date": "2025-11-18T09:45:00",
+      "rating": 4,
+      "userName": "happy_investor",
+      "review": "Good app with clean interface. Easy to track portfolio and make investments. Some minor issues with notifications not working sometimes but overall a solid experience for daily use.",
+      "title": "Pretty Good",
+      "isEdited": true
+    },
+    {
+      "date": "2025-11-17T16:20:00",
+      "rating": 3,
+      "userName": "average_joe",
+      "review": "Average experience with this app. It does the basic job of helping you invest but lacks advanced features that competitors have. The charts could be more detailed and interactive.",
+      "title": "Could Be Better",
+      "isEdited": false
+    },
+    {
+      "date": "2025-11-16T11:00:00",
+      "rating": 1,
+      "userName": "angry_customer",
+      "review": "Worst customer service ever! My withdrawal has been pending for 2 weeks and no one responds to my queries. The app also crashes when market opens. Totally unreliable for serious investors.",
+      "title": "Avoid This App",
+      "isEdited": false
+    }
+  ],
+  "junk_reviews": [
+    {
+      "id": "junk_001",
+      "text": "Nice app",
+      "rating": 5,
+      "reason": "too_short (< 100 chars)"
+    },
+    {
+      "id": "junk_002",
+      "text": "Good",
+      "rating": 4,
+      "reason": "too_short (< 100 chars)"
+    },
+    {
+      "id": "junk_003",
+      "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "rating": 5,
+      "reason": "repeated_chars"
+    },
+    {
+      "id": "junk_004",
+      "text": "Free coins hack! Download mod apk from my profile to get unlimited money. Click here for free premium features. Visit www.scam-site.com for more cheats and generators!",
+      "rating": 5,
+      "reason": "spam_keywords"
+    },
+    {
+      "id": "junk_005",
+      "text": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+      "rating": 5,
+      "reason": "emoji_only"
+    }
+  ],
+  "valid_reviews": [
+    {
+      "id": "valid_001",
+      "source": "google_play",
+      "rating": 5,
+      "text": "This is a great app for investing! Easy to use and understand. The interface is clean and the charts are very helpful for tracking investments. Highly recommend for beginners.",
+      "timestamp": "2025-11-20T14:30:00",
+      "author_hash": "abc12345",
+      "char_count": 194,
+      "word_count": 33
+    },
+    {
+      "id": "valid_002",
+      "source": "google_play",
+      "rating": 1,
+      "text": "App crashes frequently when I try to view my portfolio. This has been happening for the past week and it's very frustrating. I cannot track my investments properly. Please fix this issue.",
+      "timestamp": "2025-11-19T09:15:00",
+      "author_hash": "def67890",
+      "char_count": 189,
+      "word_count": 35
+    },
+    {
+      "id": "valid_003",
+      "source": "apple_store",
+      "rating": 4,
+      "text": "Good app with clean interface. Easy to track portfolio and make investments. Some minor issues with notifications not working sometimes but overall a solid experience for daily use.",
+      "timestamp": "2025-11-18T09:45:00",
+      "author_hash": "ghi11223",
+      "char_count": 181,
+      "word_count": 30
+    }
+  ],
+  "duplicate_reviews": [
+    {
+      "id": "dup_001",
+      "source": "google_play",
+      "text": "This is a great app for investing! Easy to use and understand. The interface is clean and the charts are very helpful for tracking investments. Highly recommend for beginners.",
+      "rating": 5
+    },
+    {
+      "id": "dup_002",
+      "source": "apple_store",
+      "text": "This is a great app for investing! Easy to use and understand. The interface is clean and the charts are very helpful for tracking investments. Highly recommend for beginners.",
+      "rating": 5,
+      "_note": "Same text as dup_001, should be flagged as duplicate"
+    }
+  ]
+}
+
