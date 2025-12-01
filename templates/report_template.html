@@ -121,10 +121,14 @@
                             <h1 style="margin: 0 0 8px 0; font-size: 24px; font-weight: 700; color: #FFFFFF; line-height: 1.2;">
                                 {{ summary.title }}
                             </h1>
-                            <div style="font-size: 13px; color: #E2E8F0; display: flex; align-items: center;">
+                            <div style="font-size: 13px; color: #E2E8F0; display: flex; align-items: center; flex-wrap: wrap;">
                                 <span> 📆{{ summary.date_range }}</span>
                                 <span style="margin: 0 8px; opacity: 0.5;">|</span>
                                 <span>{{ summary.total_reviews }} ✍🏼Reviews</span>
+                                {% if summary.total_insights %}
+                                <span style="margin: 0 8px; opacity: 0.5;">|</span>
+                                <span>{{ summary.total_insights }} 💡Insights</span>
+                                {% endif %}
                             </div>
                         </td>
                     </tr>

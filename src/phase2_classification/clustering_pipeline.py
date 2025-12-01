@@ -1,19 +1,18 @@
-"""Weekly clustering pipeline for review classification."""
+"""Weekly clustering pipeline for insight-based classification."""
 
 import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 
 import numpy as np
 
-from src.phase2_classification.embeddings import EmbeddingGenerator
-from src.phase2_classification.clustering import UMAPReducer, HDBSCANClusterer, RepresentativeSelector
-from src.phase2_classification.labeling import ClusterLabeler, ThemeMapper
+from src.phase2_classification.multi_theme_extractor import MultiThemeExtractor
+from src.phase2_classification.insight_clustering import InsightClusteringPipeline
 from src.phase2_classification.models import (
-    ClusteredReview,
-    ClusterInfo,
+    MultiThemeReview,
+    InsightCluster,
     ClusteringMetadata,
     WeeklyClustersOutput,
     ClustersReport
@@ -25,21 +24,19 @@ logger = logging.getLogger(__name__)
 
 class ClusteringPipeline:
     """
-    Embedding-based clustering pipeline for review classification.
+    Insight-based clustering pipeline for multi-theme review classification.
     
     Pipeline stages:
-    1. Load and filter reviews by week
-    2. Generate embeddings (with caching)
-    3. Reduce dimensions with UMAP
-    4. Cluster with HDBSCAN
-    5. Select representatives per cluster
-    6. Label clusters with LLM
-    7. Map clusters to themes
-    8. Output JSON files
+    1. Load reviews for specified weeks
+    2. Extract insights from all reviews (using MultiThemeExtractor)
+    3. Cluster insights (using InsightClusteringPipeline)
+    4. Generate insight cluster reports
+    5. Output insight-based classification results
     """
     
     def __init__(
         self,
+        themes: List[Dict[str, Any]],
         # Embedding settings
         embedding_model: str = "all-MiniLM-L6-v2",
         cache_path: str = "data/classified/embeddings.db",
@@ -48,15 +45,34 @@ class ClusteringPipeline:
         umap_n_neighbors: int = 15,
         umap_min_dist: float = 0.1,
         # HDBSCAN settings
-        hdbscan_min_cluster_size: int = 3,  # Reduced to allow more clusters
+        hdbscan_min_cluster_size: int = 3,
         hdbscan_min_samples: int = 2,
-        # Theme mapping settings
-        confidence_threshold: float = 0.7,  # Higher threshold = more LLM fallback for better accuracy
-        use_llm_fallback: bool = True,
+        # Extraction settings
+        extraction_batch_size: int = 10,
+        extraction_delay: float = 1.0,
         # Output settings
         output_dir: str = "data/classified"
     ):
-        """Initialize clustering pipeline with configurable parameters."""
+        """
+        Initialize clustering pipeline with configurable parameters.
+        
+        Args:
+            themes: List of theme dictionaries with 'id', 'name', 'description', 'keywords'
+            embedding_model: Model name for embeddings
+            cache_path: Path to embedding cache database
+            umap_n_components: UMAP target dimensions
+            umap_n_neighbors: UMAP neighbors parameter
+            umap_min_dist: UMAP minimum distance
+            hdbscan_min_cluster_size: Minimum cluster size for HDBSCAN
+            hdbscan_min_samples: Minimum samples for HDBSCAN
+            extraction_batch_size: Batch size for insight extraction
+            extraction_delay: Delay between extraction batches
+            output_dir: Directory for output files
+        """
+        if not themes:
+            raise ValueError("Themes list cannot be empty")
+        
+        self.themes = themes
         self.embedding_model = embedding_model
         self.cache_path = cache_path
         self.umap_n_components = umap_n_components
@@ -64,65 +80,38 @@ class ClusteringPipeline:
         self.umap_min_dist = umap_min_dist
         self.hdbscan_min_cluster_size = hdbscan_min_cluster_size
         self.hdbscan_min_samples = hdbscan_min_samples
-        self.confidence_threshold = confidence_threshold
-        self.use_llm_fallback = use_llm_fallback
+        self.extraction_batch_size = extraction_batch_size
+        self.extraction_delay = extraction_delay
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
         # Initialize components (lazy)
-        self._embedding_generator = None
-        self._umap_reducer = None
-        self._hdbscan_clusterer = None
-        self._representative_selector = None
-        self._cluster_labeler = None
-        self._theme_mapper = None
+        self._insight_extractor = None
+        self._insight_clustering_pipeline = None
         
-        logger.info("ClusteringPipeline initialized")
+        logger.info(f"ClusteringPipeline initialized with {len(themes)} themes")
     
-    def _get_embedding_generator(self) -> EmbeddingGenerator:
-        if self._embedding_generator is None:
-            self._embedding_generator = EmbeddingGenerator(
-                model_name=self.embedding_model,
-                cache_path=self.cache_path
+    def _get_insight_extractor(self) -> MultiThemeExtractor:
+        if self._insight_extractor is None:
+            self._insight_extractor = MultiThemeExtractor(
+                themes=self.themes,
+                batch_size=self.extraction_batch_size,
+                delay_between_batches=self.extraction_delay
             )
-        return self._embedding_generator
+        return self._insight_extractor
     
-    def _get_umap_reducer(self) -> UMAPReducer:
-        if self._umap_reducer is None:
-            self._umap_reducer = UMAPReducer(
-                n_components=self.umap_n_components,
-                n_neighbors=self.umap_n_neighbors,
-                min_dist=self.umap_min_dist
+    def _get_insight_clustering_pipeline(self) -> InsightClusteringPipeline:
+        if self._insight_clustering_pipeline is None:
+            self._insight_clustering_pipeline = InsightClusteringPipeline(
+                embedding_model=self.embedding_model,
+                cache_path=self.cache_path,
+                umap_n_components=self.umap_n_components,
+                umap_n_neighbors=self.umap_n_neighbors,
+                umap_min_dist=self.umap_min_dist,
+                hdbscan_min_cluster_size=self.hdbscan_min_cluster_size,
+                hdbscan_min_samples=self.hdbscan_min_samples
             )
-        return self._umap_reducer
-    
-    def _get_hdbscan_clusterer(self) -> HDBSCANClusterer:
-        if self._hdbscan_clusterer is None:
-            self._hdbscan_clusterer = HDBSCANClusterer(
-                min_cluster_size=self.hdbscan_min_cluster_size,
-                min_samples=self.hdbscan_min_samples
-            )
-        return self._hdbscan_clusterer
-    
-    def _get_representative_selector(self) -> RepresentativeSelector:
-        if self._representative_selector is None:
-            self._representative_selector = RepresentativeSelector(
-                max_representatives=4
-            )
-        return self._representative_selector
-    
-    def _get_cluster_labeler(self) -> ClusterLabeler:
-        if self._cluster_labeler is None:
-            self._cluster_labeler = ClusterLabeler()
-        return self._cluster_labeler
-    
-    def _get_theme_mapper(self) -> ThemeMapper:
-        if self._theme_mapper is None:
-            self._theme_mapper = ThemeMapper(
-                confidence_threshold=self.confidence_threshold,
-                use_llm_fallback=self.use_llm_fallback
-            )
-        return self._theme_mapper
+        return self._insight_clustering_pipeline
     
     def run(
         self,
@@ -131,7 +120,7 @@ class ClusteringPipeline:
         output_prefix: Optional[str] = None
     ) -> Tuple[WeeklyClustersOutput, ClustersReport]:
         """
-        Run the clustering pipeline for a specific week.
+        Run the insight-based clustering pipeline for a specific week.
         
         Args:
             input_file: Path to Phase 1 JSON output
@@ -142,92 +131,44 @@ class ClusteringPipeline:
             Tuple of (WeeklyClustersOutput, ClustersReport)
         """
         logger.info("=" * 70)
-        logger.info(f"Starting Clustering Pipeline for {target_week}")
+        logger.info(f"Starting Insight-Based Clustering Pipeline for {target_week}")
         logger.info("=" * 70)
         
-        llm_calls = 0
-        
-        # Step 1: Load and filter reviews
-        logger.info("\n[Step 1/7] Loading and filtering reviews...")
+        # Step 1: Load reviews for specified week
+        logger.info("\n[Step 1/4] Loading reviews...")
         reviews = self._load_reviews(input_file, target_week)
         logger.info(f"Loaded {len(reviews)} reviews for {target_week}")
         
-        if len(reviews) < 10:
-            raise ValueError(f"Not enough reviews ({len(reviews)}) for clustering")
+        if len(reviews) < 1:
+            raise ValueError(f"Not enough reviews ({len(reviews)}) for processing")
         
-        # Step 2: Generate embeddings
-        logger.info("\n[Step 2/7] Generating embeddings...")
-        embedding_gen = self._get_embedding_generator()
-        embeddings = embedding_gen.embed_reviews(reviews, text_field="text")
-        logger.info(f"Generated {len(embeddings)} embeddings ({embeddings.shape[1]}d)")
+        # Step 2: Extract insights from all reviews
+        logger.info("\n[Step 2/4] Extracting multi-theme insights from reviews...")
+        extractor = self._get_insight_extractor()
+        multi_theme_reviews = extractor.extract_all_reviews(reviews)
+        logger.info(f"Extracted insights from {len(multi_theme_reviews)} reviews")
         
-        # Step 3: Reduce dimensions
-        logger.info("\n[Step 3/7] Reducing dimensions with UMAP...")
-        reducer = self._get_umap_reducer()
-        reduced_embeddings = reducer.fit_transform(embeddings)
-        logger.info(f"Reduced to {reduced_embeddings.shape[1]}d")
+        # Count total insights extracted
+        total_insights = sum(len(review.insights) for review in multi_theme_reviews)
+        logger.info(f"Total insights extracted: {total_insights}")
         
-        # Step 4: Cluster with HDBSCAN (with KMeans fallback for theme diversity)
-        logger.info("\n[Step 4/7] Clustering with HDBSCAN...")
-        clusterer = self._get_hdbscan_clusterer()
-        cluster_result = clusterer.fit_predict(reduced_embeddings)
-        logger.info(
-            f"Found {cluster_result.n_clusters} clusters, "
-            f"{cluster_result.n_noise} noise points"
-        )
+        if total_insights == 0:
+            logger.warning("No insights extracted from reviews. Pipeline will produce empty results.")
         
-        # If we have too few clusters (< 3), use KMeans to ensure theme diversity
-        if cluster_result.n_clusters < 3 and len(reviews) >= 15:
-            logger.info(f"HDBSCAN found only {cluster_result.n_clusters} clusters. Using KMeans (k=5) for better theme coverage...")
-            from sklearn.cluster import KMeans
-            kmeans = KMeans(n_clusters=5, random_state=42, n_init=10)
-            kmeans_labels = kmeans.fit_predict(reduced_embeddings)
-            
-            # Convert to ClusterResult format
-            cluster_result.labels = kmeans_labels
-            cluster_result.probabilities = np.ones(len(kmeans_labels))  # KMeans doesn't have probabilities
-            cluster_result.n_clusters = 5
-            cluster_result.n_noise = 0
-            cluster_result.cluster_sizes = {i: int(np.sum(kmeans_labels == i)) for i in range(5)}
-            logger.info(f"KMeans created 5 clusters with sizes: {cluster_result.cluster_sizes}")
+        # Step 3: Cluster insights
+        logger.info("\n[Step 3/4] Clustering insights...")
+        clustering_pipeline = self._get_insight_clustering_pipeline()
+        insight_clusters = clustering_pipeline.cluster_insights(multi_theme_reviews)
+        logger.info(f"Created {len(insight_clusters)} insight clusters")
         
-        # Step 5: Select representatives
-        logger.info("\n[Step 5/7] Selecting cluster representatives...")
-        rep_selector = self._get_representative_selector()
-        all_representatives = rep_selector.select_all_representatives(
-            cluster_result.labels,
-            embeddings,  # Use original embeddings for distance calc
-            reviews
-        )
+        # Count LLM calls (approximate: one per cluster for labeling)
+        llm_calls = len(insight_clusters)  # One LLM call per cluster for labeling
         
-        # Step 6: Label clusters with LLM
-        logger.info("\n[Step 6/7] Labeling clusters with LLM...")
-        labeler = self._get_cluster_labeler()
-        cluster_labels = labeler.label_all_clusters(all_representatives)
-        llm_calls += len(cluster_labels)  # One LLM call per cluster
-        
-        # Step 7: Map clusters to themes
-        logger.info("\n[Step 7/7] Mapping clusters to themes...")
-        mapper = self._get_theme_mapper()
-        theme_mappings = mapper.map_all_clusters(
-            cluster_labels, 
-            all_representatives,
-            cluster_sizes=cluster_result.cluster_sizes
-        )
-        
-        # Count LLM calls for mapping (only for non-deterministic)
-        for mapping in theme_mappings.values():
-            if mapping.mapping_method == "llm":
-                llm_calls += 1
-        
-        # Build output
-        logger.info("\nBuilding output...")
+        # Step 4: Generate insight cluster reports
+        logger.info("\n[Step 4/4] Generating reports...")
         weekly_output, clusters_report = self._build_output(
-            reviews=reviews,
-            cluster_result=cluster_result,
-            all_representatives=all_representatives,
-            cluster_labels=cluster_labels,
-            theme_mappings=theme_mappings,
+            multi_theme_reviews=multi_theme_reviews,
+            insight_clusters=insight_clusters,
             target_week=target_week,
             input_file=input_file,
             llm_calls=llm_calls
@@ -235,22 +176,19 @@ class ClusteringPipeline:
         
         # Save outputs
         if output_prefix is None:
-            output_prefix = f"clusters_{target_week}"
+            output_prefix = f"insights_{target_week}"
         
-        clusters_file = self.output_dir / f"{output_prefix}.json"
-        report_file = self.output_dir / f"{output_prefix}_report.json"
+        clusters_file = self.output_dir / f"{output_prefix}_report.json"
         
-        self._save_output(weekly_output, clusters_file)
-        self._save_output(clusters_report, report_file)
+        self._save_output(clusters_report, clusters_file)
         
         logger.info("\n" + "=" * 70)
-        logger.info("Clustering Pipeline Complete!")
+        logger.info("Insight-Based Clustering Pipeline Complete!")
         logger.info(f"  Week: {target_week}")
         logger.info(f"  Reviews: {len(reviews)}")
-        logger.info(f"  Clusters: {cluster_result.n_clusters}")
-        logger.info(f"  LLM Calls: {llm_calls}")
+        logger.info(f"  Insights: {total_insights}")
+        logger.info(f"  Clusters: {len(insight_clusters)}")
         logger.info(f"  Output: {clusters_file}")
-        logger.info(f"  Report: {report_file}")
         logger.info("=" * 70)
         
         return weekly_output, clusters_report
@@ -270,138 +208,108 @@ class ClusteringPipeline:
     
     def _build_output(
         self,
-        reviews: List[Dict],
-        cluster_result,
-        all_representatives: Dict,
-        cluster_labels: Dict,
-        theme_mappings: Dict,
+        multi_theme_reviews: List[MultiThemeReview],
+        insight_clusters: List[InsightCluster],
         target_week: str,
         input_file: str,
-        llm_calls: int
+        llm_calls: int = 0
     ) -> Tuple[WeeklyClustersOutput, ClustersReport]:
-        """Build output objects from pipeline results."""
+        """
+        Build output objects from insight clustering results.
         
-        # Build ClusteredReview objects
-        clustered_reviews = []
-        representative_ids = set()
+        Aggregates insights by theme-sentiment and generates comprehensive reports.
+        """
+        # Calculate statistics
+        total_insights = sum(len(review.insights) for review in multi_theme_reviews)
+        total_reviews = len(multi_theme_reviews)
         
-        # Collect representative IDs
-        for cluster_id, reps in all_representatives.items():
-            for rep in reps:
-                representative_ids.add(rep.review_id)
+        # Aggregate insights by theme-sentiment
+        theme_sentiment_distribution = {}
+        theme_sentiment_clusters = {}  # Track clusters per theme-sentiment
         
-        # Assign themes to all reviews based on their cluster
-        for i, review in enumerate(reviews):
-            cluster_id = int(cluster_result.labels[i])
-            confidence = float(cluster_result.probabilities[i])
+        for cluster in insight_clusters:
+            # Build distribution
+            if cluster.theme_id not in theme_sentiment_distribution:
+                theme_sentiment_distribution[cluster.theme_id] = {}
+            theme_sentiment_distribution[cluster.theme_id][cluster.sentiment] = \
+                theme_sentiment_distribution[cluster.theme_id].get(cluster.sentiment, 0) + cluster.size
             
-            if cluster_id == -1:
-                # Noise point
-                theme_id = "UNMAPPED"
-                theme_name = "Unmapped/Other"
-            else:
-                # Get theme from cluster mapping
-                mapping = theme_mappings.get(cluster_id)
-                if mapping:
-                    theme_id = mapping.theme_id
-                    theme_name = mapping.theme_name
-                    confidence = mapping.confidence
-                else:
-                    theme_id = "UNMAPPED"
-                    theme_name = "Unmapped/Other"
-            
-            clustered_review = ClusteredReview(
-                id=review.get("id", ""),
-                source=review.get("source", "google_play"),
-                rating=review.get("rating", 0),
-                text=review.get("text", ""),
-                timestamp=review.get("timestamp"),
-                author_hash=review.get("author_hash", ""),
-                helpful_count=review.get("helpful_count", 0),
-                cluster_id=cluster_id,
-                theme_id=theme_id,
-                theme_name=theme_name,
-                confidence=confidence,
-                is_representative=review.get("id", "") in representative_ids
-            )
-            clustered_reviews.append(clustered_review)
+            # Track clusters
+            key = (cluster.theme_id, cluster.sentiment)
+            if key not in theme_sentiment_clusters:
+                theme_sentiment_clusters[key] = []
+            theme_sentiment_clusters[key].append(cluster)
         
-        # Build theme quotes
+        # Build theme quotes from representative insights (top insights per theme)
         theme_quotes = {}
-        for cluster_id, reps in all_representatives.items():
-            mapping = theme_mappings.get(cluster_id)
-            if mapping and mapping.theme_id not in ["UNMAPPED", "MULTI"]:
-                if mapping.theme_id not in theme_quotes:
-                    theme_quotes[mapping.theme_id] = []
-                for rep in reps[:2]:  # Top 2 quotes per cluster
-                    if len(rep.text) > 50:  # Meaningful quote
-                        theme_quotes[mapping.theme_id].append(rep.text[:200] + "...")
+        for cluster in insight_clusters:
+            if cluster.theme_id not in theme_quotes:
+                theme_quotes[cluster.theme_id] = []
+            # Add source_text from representative insights
+            for insight in cluster.representative_insights[:2]:  # Top 2 per cluster
+                if insight.source_text and insight.source_text not in theme_quotes[cluster.theme_id]:
+                    theme_quotes[cluster.theme_id].append(insight.source_text[:200])
+            # Limit to top 5 quotes per theme
+            if len(theme_quotes[cluster.theme_id]) > 5:
+                theme_quotes[cluster.theme_id] = theme_quotes[cluster.theme_id][:5]
         
-        # Calculate distributions
-        theme_distribution = {}
-        rating_distribution = {"1": 0, "2": 0, "3": 0, "4": 0, "5": 0}
-        
-        for review in clustered_reviews:
-            theme_distribution[review.theme_id] = theme_distribution.get(review.theme_id, 0) + 1
-            rating_distribution[str(review.rating)] = rating_distribution.get(str(review.rating), 0) + 1
-        
-        # Build metadata
-        unmapped_count = sum(1 for r in clustered_reviews if r.theme_id in ["UNMAPPED", "MULTI"])
-        
+        # Build metadata with comprehensive statistics
         metadata = ClusteringMetadata(
             week_id=target_week,
             source_file=input_file,
-            total_reviews=len(reviews),
-            clusters_formed=cluster_result.n_clusters,
-            noise_count=cluster_result.n_noise,
-            unmapped_count=unmapped_count,
+            total_reviews=total_reviews,
+            total_insights=total_insights,
+            clusters_formed=len(insight_clusters),
+            noise_count=0,  # Noise handled differently in insight clustering
+            unmapped_count=0,  # All insights are mapped to themes
             llm_calls=llm_calls,
+            clustering_type="insight",
             embedding_model=self.embedding_model,
             umap_n_components=self.umap_n_components,
             hdbscan_min_cluster_size=self.hdbscan_min_cluster_size,
-            confidence_threshold=self.confidence_threshold
+            confidence_threshold=0.0  # Not used in insight clustering
         )
         
+        # Build rating distribution from reviews
+        rating_distribution = {"1": 0, "2": 0, "3": 0, "4": 0, "5": 0}
+        for review in multi_theme_reviews:
+            rating_distribution[str(review.rating)] = rating_distribution.get(str(review.rating), 0) + 1
+        
+        # Build theme distribution (count of insights per theme)
+        theme_distribution = {}
+        for cluster in insight_clusters:
+            theme_distribution[cluster.theme_id] = theme_distribution.get(cluster.theme_id, 0) + cluster.size
+        
+        # Sort clusters by size (largest first) for better report readability
+        sorted_insight_clusters = sorted(insight_clusters, key=lambda c: c.size, reverse=True)
+        
+        # Create WeeklyClustersOutput with insight-based data
         weekly_output = WeeklyClustersOutput(
             metadata=metadata,
-            reviews=clustered_reviews,
+            reviews=[],  # Empty for insight-based clustering (reviews are in multi_theme_reviews)
+            multi_theme_reviews=multi_theme_reviews,
             theme_quotes=theme_quotes,
             theme_distribution=theme_distribution,
+            theme_sentiment_distribution=theme_sentiment_distribution,
             rating_distribution=rating_distribution
         )
         
-        # Build clusters report
-        cluster_infos = []
-        for cluster_id in sorted(cluster_result.cluster_sizes.keys()):
-            label = cluster_labels.get(cluster_id)
-            mapping = theme_mappings.get(cluster_id)
-            reps = all_representatives.get(cluster_id, [])
-            
-            # Calculate cluster averages
-            cluster_reviews = [r for r in clustered_reviews if r.cluster_id == cluster_id]
-            avg_confidence = np.mean([r.confidence for r in cluster_reviews]) if cluster_reviews else 0.0
-            avg_rating = np.mean([r.rating for r in cluster_reviews]) if cluster_reviews else 0.0
-            
-            cluster_info = ClusterInfo(
-                cluster_id=cluster_id,
-                size=cluster_result.cluster_sizes[cluster_id],
-                theme_id=mapping.theme_id if mapping else "UNMAPPED",
-                theme_name=mapping.theme_name if mapping else "Unmapped",
-                label=label.label if label else "Unknown",
-                summary=label.summary if label else "",
-                key_issues=label.key_issues if label else [],
-                avg_confidence=round(avg_confidence, 3),
-                avg_rating=round(avg_rating, 2),
-                representative_ids=[r.review_id for r in reps],
-                mapping_method=mapping.mapping_method if mapping else ""
-            )
-            cluster_infos.append(cluster_info)
-        
+        # Build clusters report with insight clusters (sorted by size)
         clusters_report = ClustersReport(
             week_id=target_week,
-            total_clusters=cluster_result.n_clusters,
-            clusters=cluster_infos
+            total_clusters=len(insight_clusters),
+            clusters=[],  # Empty for insight-based clustering
+            insight_clusters=sorted_insight_clusters,  # Sorted by size
+            clustering_type="insight"
         )
+        
+        # Log summary statistics
+        logger.info(f"\nReport Summary:")
+        logger.info(f"  Total reviews: {total_reviews}")
+        logger.info(f"  Total insights: {total_insights}")
+        logger.info(f"  Insight clusters: {len(insight_clusters)}")
+        logger.info(f"  Themes covered: {len(theme_distribution)}")
+        logger.info(f"  Theme-sentiment pairs: {sum(len(sents) for sents in theme_sentiment_distribution.values())}")
         
         return weekly_output, clusters_report
     
@@ -418,6 +326,7 @@ class ClusteringPipeline:
 def run_clustering_pipeline(
     input_file: str,
     target_week: str,
+    themes: List[Dict[str, Any]],
     **kwargs
 ) -> Tuple[WeeklyClustersOutput, ClustersReport]:
     """
@@ -426,12 +335,13 @@ def run_clustering_pipeline(
     Args:
         input_file: Path to Phase 1 JSON output
         target_week: Week ID to process (e.g., "2025-W38")
+        themes: List of theme dictionaries with 'id', 'name', 'description', 'keywords'
         **kwargs: Additional arguments for ClusteringPipeline
     
     Returns:
         Tuple of (WeeklyClustersOutput, ClustersReport)
     """
-    pipeline = ClusteringPipeline(**kwargs)
+    pipeline = ClusteringPipeline(themes=themes, **kwargs)
     return pipeline.run(input_file, target_week)
 
 

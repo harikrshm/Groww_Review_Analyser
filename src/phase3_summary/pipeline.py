@@ -45,28 +45,114 @@ class Phase3Pipeline:
         self.report_template = self.env.get_template("report_template.html")
         
         logger.info("Phase3Pipeline initialized")
+    
+    def _find_cluster_report_file(self, week_id: str, classified_dir: str = "data/classified") -> Optional[str]:
+        """
+        Automatically find the cluster report file for a given week.
+        Tries insight cluster report first, then falls back to review cluster report.
+        
+        Args:
+            week_id: Week identifier (e.g., "2025-W42")
+            classified_dir: Directory containing cluster reports
+        
+        Returns:
+            Path to cluster report file, or None if not found
+        """
+        classified_path = Path(classified_dir)
+        
+        # Try insight cluster report first (new format)
+        insight_file = classified_path / f"insights_{week_id}_report.json"
+        if insight_file.exists():
+            return str(insight_file)
+        
+        # Fall back to review cluster report (old format)
+        review_file = classified_path / f"clusters_{week_id}_report.json"
+        if review_file.exists():
+            return str(review_file)
+        
+        return None
 
     def run(self, 
             week_id: str, 
-            clusters_file: str,
-            reviews_file: str) -> str:
+            clusters_file: Optional[str] = None,
+            reviews_file: Optional[str] = None,
+            insight_clusters_file: Optional[str] = None,
+            auto_detect: bool = False) -> str:
         """
         Run the pipeline for a specific week.
+        
+        Args:
+            week_id: Week identifier (e.g., "2025-W42")
+            clusters_file: Path to review cluster report (for review-based clustering)
+            reviews_file: Path to raw reviews file (for review count)
+            insight_clusters_file: Path to insight cluster report (for insight-based clustering)
+                                  If provided, takes precedence over clusters_file
+            auto_detect: If True, automatically find cluster report file (tries insight format first)
+        
+        Returns:
+            Path to generated HTML report
         """
         logger.info(f"Starting Phase 3 for {week_id}...")
         
         # 1. Load Data
-        clusters_report = load_json_file(clusters_file)
-        raw_reviews_data = load_json_file(reviews_file)
+        # Determine which file to load based on what's provided
+        if auto_detect and not clusters_file and not insight_clusters_file:
+            # Auto-detect cluster report file
+            detected_file = self._find_cluster_report_file(week_id)
+            if detected_file:
+                clusters_file = detected_file
+                logger.info(f"Auto-detected cluster report: {clusters_file}")
+            else:
+                raise FileNotFoundError(f"Could not find cluster report file for {week_id}")
         
-        df_reviews = self._prepare_dataframe(raw_reviews_data["reviews"])
+        if insight_clusters_file:
+            # Use insight cluster report if provided
+            clusters_report = load_json_file(insight_clusters_file)
+            logger.info(f"Loaded insight cluster report: {insight_clusters_file}")
+        elif clusters_file:
+            # Load cluster report (could be either format)
+            clusters_report = load_json_file(clusters_file)
+            logger.info(f"Loaded cluster report: {clusters_file}")
+        else:
+            raise ValueError("Either clusters_file or insight_clusters_file must be provided, or use auto_detect=True")
+        
+        # Determine clustering type
+        clustering_type = clusters_report.get("clustering_type", "review")
+        is_insight_based = clustering_type == "insight"
+        
+        # Load reviews for count (if file provided)
+        total_reviews = 0
+        if reviews_file:
+            raw_reviews_data = load_json_file(reviews_file)
+            df_reviews = self._prepare_dataframe(raw_reviews_data.get("reviews", []))
+            total_reviews = len(df_reviews[df_reviews["week_id"] == week_id])
+        elif is_insight_based:
+            # For insight-based, try to get review count from metadata if available
+            # Or from multi_theme_reviews if present in clusters_report
+            metadata = clusters_report.get("metadata", {})
+            total_reviews = metadata.get("total_reviews", 0)
+            if total_reviews == 0:
+                # Try to count unique review_ids from insight clusters
+                review_ids = set()
+                for cluster in clusters_report.get("insight_clusters", []):
+                    review_ids.update(cluster.get("review_ids", []))
+                total_reviews = len(review_ids)
+        
+        # Get total_insights if insight-based clustering
+        total_insights = None
+        if is_insight_based:
+            total_insights = sum(
+                cluster.get("size", 0) 
+                for cluster in clusters_report.get("insight_clusters", [])
+            )
+            logger.info(f"Found {total_insights} insights from {total_reviews} reviews")
         
         # 2. Generate Summary (LLM)
-        total_reviews = len(df_reviews[df_reviews["week_id"] == week_id])
         summary = self.summarizer.generate_summary(
             week_id=week_id,
             clusters_report=clusters_report,
-            total_reviews=total_reviews
+            total_reviews=total_reviews,
+            total_insights=total_insights
         )
         
         # Save structured summary
@@ -74,16 +160,15 @@ class Phase3Pipeline:
         save_json_file(summary.model_dump(mode='json'), summary_path)
         logger.info(f"Saved summary JSON: {summary_path}")
         
-        # 3. Generate Graphs (New Types)
-        # Need theme-level data for graphs. Since raw reviews don't have themes,
-        # we use the cluster report or construct a dataframe from clusters.
-        
+        # 3. Generate Graphs
+        # Need theme-level data for graphs. We construct a dataframe from clusters.
         theme_df = self._prepare_cluster_dataframe(clusters_report)
         
-        # Graph: Sentiment Balance (Diverging Bar) - shows sentiment for all 5 themes
+        # Graph: Sentiment Balance (Diverging Bar) - shows sentiment for all themes
         sentiment_img_path = self.graph_generator.generate_sentiment_balance_chart(
             data=theme_df,
-            filename=f"sentiment_balance_{week_id}.png"
+            filename=f"sentiment_balance_{week_id}.png",
+            is_insight_based=is_insight_based
         )
         
         # 4. Render HTML Report
@@ -114,32 +199,47 @@ class Phase3Pipeline:
 
     def _prepare_cluster_dataframe(self, clusters_report: Dict) -> pd.DataFrame:
         """
-        Construct a DataFrame representing the clustered reviews for graphing.
-        Since we don't have individual reviews here, we simulate them from cluster aggregates
-        or use cluster-level data directly depending on graph needs.
+        Construct a DataFrame representing the clustered data for graphing.
         
-        For 'Sentiment Balance', we need: theme_id, rating, count.
-        Clusters have: theme_id, avg_rating, size.
+        For review-based clustering: theme_id, rating, count
+        For insight-based clustering: theme_id, sentiment, count
         """
+        clustering_type = clusters_report.get("clustering_type", "review")
+        is_insight_based = clustering_type == "insight"
+        
         data = []
-        for cluster in clusters_report.get("clusters", []):
-            if cluster.get("theme_id") == "UNMAPPED":
-                continue
+        
+        if is_insight_based:
+            # For insight clusters, use sentiment directly
+            for cluster in clusters_report.get("insight_clusters", []):
+                if cluster.get("theme_id") == "UNMAPPED":
+                    continue
                 
-            # We only have avg_rating. To simulate distribution for the graph:
-            # If avg > 4, mostly 5s. If avg < 2, mostly 1s.
-            # This is an approximation for visual impact since we don't load the full granular JSON here.
-            avg_rating = cluster.get("avg_rating", 3)
-            size = cluster.get("size", 0)
-            
-            # Round to nearest integer for bucket
-            rating_bucket = int(round(avg_rating))
-            rating_bucket = max(1, min(5, rating_bucket))
-            
-            data.append({
-                "theme_id": cluster.get("theme_id", "unknown"),
-                "rating": rating_bucket,
-                "count": size
-            })
+                data.append({
+                    "theme_id": cluster.get("theme_id", "unknown"),
+                    "sentiment": cluster.get("sentiment", "neutral"),
+                    "count": cluster.get("size", 0)
+                })
+        else:
+            # For review clusters, derive sentiment from rating
+            for cluster in clusters_report.get("clusters", []):
+                if cluster.get("theme_id") == "UNMAPPED":
+                    continue
+                    
+                # We only have avg_rating. To simulate distribution for the graph:
+                # If avg > 4, mostly 5s. If avg < 2, mostly 1s.
+                # This is an approximation for visual impact since we don't load the full granular JSON here.
+                avg_rating = cluster.get("avg_rating", 3)
+                size = cluster.get("size", 0)
+                
+                # Round to nearest integer for bucket
+                rating_bucket = int(round(avg_rating))
+                rating_bucket = max(1, min(5, rating_bucket))
+                
+                data.append({
+                    "theme_id": cluster.get("theme_id", "unknown"),
+                    "rating": rating_bucket,
+                    "count": size
+                })
             
         return pd.DataFrame(data)

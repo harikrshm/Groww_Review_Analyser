@@ -4,6 +4,7 @@ import json
 import tempfile
 from pathlib import Path
 from typing import Dict, List
+from unittest.mock import Mock, patch
 
 import numpy as np
 import pytest
@@ -620,3 +621,602 @@ class TestClusteringPipeline:
             mappings = mapper.map_all_clusters(cluster_labels)
             assert len(mappings) == result.n_clusters
 
+
+# ============================================
+# Multi-Theme Extractor Tests
+# ============================================
+
+class TestMultiThemeExtractor:
+    """Tests for MultiThemeExtractor."""
+    
+    @pytest.fixture
+    def sample_themes_for_extraction(self, config_dir: Path) -> list[dict]:
+        """Load themes from config for extraction tests."""
+        themes_path = config_dir / "themes.json"
+        with open(themes_path, 'r', encoding='utf-8') as f:
+            themes_data = json.load(f)
+        return themes_data.get("themes", [])
+    
+    def test_extractor_initialization(self, sample_themes_for_extraction: list[dict]):
+        """Test extractor initialization with themes."""
+        from src.phase2_classification.multi_theme_extractor import MultiThemeExtractor
+        
+        extractor = MultiThemeExtractor(themes=sample_themes_for_extraction)
+        
+        assert len(extractor.themes) > 0
+        assert len(extractor.theme_ids) == len(sample_themes_for_extraction)
+        assert len(extractor.theme_map) == len(sample_themes_for_extraction)
+    
+    def test_extractor_initialization_empty_themes(self):
+        """Test extractor raises error with empty themes."""
+        from src.phase2_classification.multi_theme_extractor import MultiThemeExtractor
+        
+        with pytest.raises(ValueError, match="cannot be empty"):
+            MultiThemeExtractor(themes=[])
+    
+    @pytest.mark.skipif(
+        True,  # Skip by default - requires LLM API
+        reason="Requires LLM API - use --run-slow flag"
+    )
+    def test_extract_single_theme_review(
+        self,
+        sample_themes_for_extraction: list[dict]
+    ):
+        """Test extraction from review with single theme."""
+        from src.phase2_classification.multi_theme_extractor import MultiThemeExtractor
+        from datetime import datetime
+        
+        extractor = MultiThemeExtractor(themes=sample_themes_for_extraction)
+        
+        # Review focusing on app performance
+        review = {
+            "id": "test_single_1",
+            "text": "The app crashes frequently when I try to view my portfolio. "
+                   "This has been happening for weeks and it's very frustrating. "
+                   "Please fix the performance issues.",
+            "rating": 2,
+            "timestamp": datetime.now(),
+            "source": "google_play",
+            "author_hash": "hash123"
+        }
+        
+        insights = extractor.extract_insights(review)
+        
+        assert len(insights) >= 1
+        # Should have at least one insight related to app performance
+        theme_ids = [insight.theme_id for insight in insights]
+        assert "app_performance" in theme_ids
+        
+        # Validate insight structure
+        for insight in insights:
+            assert insight.theme_id in extractor.theme_ids
+            assert insight.sentiment in ["positive", "negative", "neutral"]
+            assert 0.0 <= insight.confidence <= 1.0
+            assert insight.source_text
+            assert insight.review_id == review["id"]
+            assert insight.review_rating == review["rating"]
+    
+    @pytest.mark.skipif(
+        True,  # Skip by default - requires LLM API
+        reason="Requires LLM API - use --run-slow flag"
+    )
+    def test_extract_multiple_positive_themes(
+        self,
+        sample_themes_for_extraction: list[dict]
+    ):
+        """Test extraction from review with multiple positive themes."""
+        from src.phase2_classification.multi_theme_extractor import MultiThemeExtractor
+        from datetime import datetime
+        
+        extractor = MultiThemeExtractor(themes=sample_themes_for_extraction)
+        
+        # Review praising multiple aspects
+        review = {
+            "id": "test_multi_positive_1",
+            "text": "Great app! The user interface is clean and intuitive, "
+                   "and the app performance is excellent - no crashes or lag. "
+                   "Customer support is also very responsive and helpful.",
+            "rating": 5,
+            "timestamp": datetime.now(),
+            "source": "google_play",
+            "author_hash": "hash456"
+        }
+        
+        insights = extractor.extract_insights(review)
+        
+        # Should extract multiple insights
+        assert len(insights) >= 2
+        
+        # Check that we have insights for different themes
+        theme_ids = [insight.theme_id for insight in insights]
+        assert len(set(theme_ids)) >= 2  # At least 2 different themes
+        
+        # All should be positive sentiment
+        for insight in insights:
+            assert insight.sentiment == "positive"
+            assert insight.theme_id in extractor.theme_ids
+    
+    @pytest.mark.skipif(
+        True,  # Skip by default - requires LLM API
+        reason="Requires LLM API - use --run-slow flag"
+    )
+    def test_extract_mixed_sentiment_themes(
+        self,
+        sample_themes_for_extraction: list[dict]
+    ):
+        """Test extraction from review with mixed positive/negative themes."""
+        from src.phase2_classification.multi_theme_extractor import MultiThemeExtractor
+        from datetime import datetime
+        
+        extractor = MultiThemeExtractor(themes=sample_themes_for_extraction)
+        
+        # Review with both positive and negative aspects
+        review = {
+            "id": "test_mixed_1",
+            "text": "The app is fast and the UI is beautiful, but the fees are too high "
+                   "and customer support never responds to my queries. "
+                   "Trading execution is smooth though.",
+            "rating": 3,
+            "timestamp": datetime.now(),
+            "source": "google_play",
+            "author_hash": "hash789"
+        }
+        
+        insights = extractor.extract_insights(review)
+        
+        # Should extract multiple insights
+        assert len(insights) >= 2
+        
+        # Should have both positive and negative sentiments
+        sentiments = [insight.sentiment for insight in insights]
+        assert "positive" in sentiments
+        assert "negative" in sentiments
+        
+        # Validate all insights
+        for insight in insights:
+            assert insight.theme_id in extractor.theme_ids
+            assert insight.sentiment in ["positive", "negative", "neutral"]
+            assert insight.source_text
+    
+    @pytest.mark.skipif(
+        True,  # Skip by default - requires LLM API
+        reason="Requires LLM API - use --run-slow flag"
+    )
+    def test_extract_no_themes_review(
+        self,
+        sample_themes_for_extraction: list[dict]
+    ):
+        """Test extraction from review with no clear themes."""
+        from src.phase2_classification.multi_theme_extractor import MultiThemeExtractor
+        from datetime import datetime
+        
+        extractor = MultiThemeExtractor(themes=sample_themes_for_extraction)
+        
+        # Review that doesn't clearly match any theme
+        review = {
+            "id": "test_no_themes_1",
+            "text": "This is a generic comment. I like it. Thanks for the app.",
+            "rating": 4,
+            "timestamp": datetime.now(),
+            "source": "google_play",
+            "author_hash": "hash000"
+        }
+        
+        insights = extractor.extract_insights(review)
+        
+        # Should return empty list or very few insights
+        # (LLM might still find something, but should be minimal)
+        assert isinstance(insights, list)
+        # If insights are found, they should still be valid
+        for insight in insights:
+            assert insight.theme_id in extractor.theme_ids
+    
+    @pytest.mark.skipif(
+        True,  # Skip by default - requires LLM API
+        reason="Requires LLM API - use --run-slow flag"
+    )
+    def test_extract_all_reviews(
+        self,
+        sample_themes_for_extraction: list[dict],
+        sample_reviews_list: list[dict]
+    ):
+        """Test batch extraction from multiple reviews."""
+        from src.phase2_classification.multi_theme_extractor import MultiThemeExtractor
+        from datetime import datetime
+        
+        extractor = MultiThemeExtractor(themes=sample_themes_for_extraction, batch_size=2)
+        
+        # Convert sample reviews to proper format
+        reviews = []
+        for i, review in enumerate(sample_reviews_list[:5]):  # Test with 5 reviews
+            review_copy = review.copy()
+            if isinstance(review_copy.get("timestamp"), str):
+                review_copy["timestamp"] = datetime.fromisoformat(review_copy["timestamp"])
+            reviews.append(review_copy)
+        
+        multi_theme_reviews = extractor.extract_all_reviews(reviews)
+        
+        assert len(multi_theme_reviews) == len(reviews)
+        
+        # Validate each MultiThemeReview
+        for mtr in multi_theme_reviews:
+            assert mtr.review_id
+            assert mtr.original_text
+            assert mtr.rating >= 1 and mtr.rating <= 5
+            assert isinstance(mtr.insights, list)
+            # Primary theme should be None or a valid theme_id
+            if mtr.primary_theme:
+                assert mtr.primary_theme in extractor.theme_ids
+    
+    def test_validation_rejects_invalid_theme_id(
+        self,
+        sample_themes_for_extraction: list[dict]
+    ):
+        """Test that extractor validates theme_ids and rejects invalid ones."""
+        from src.phase2_classification.multi_theme_extractor import MultiThemeExtractor
+        
+        extractor = MultiThemeExtractor(themes=sample_themes_for_extraction)
+        
+        # Verify theme_ids are set correctly
+        assert len(extractor.theme_ids) > 0
+        assert "invalid_theme_id" not in extractor.theme_ids
+        
+        # Test that theme_map contains all themes
+        for theme in sample_themes_for_extraction:
+            assert theme["id"] in extractor.theme_map
+            assert extractor.theme_map[theme["id"]]["id"] == theme["id"]
+    
+    @pytest.mark.skipif(
+        True,  # Skip by default - requires LLM API
+        reason="Requires LLM API - use --run-slow flag"
+    )
+    def test_extract_from_raw_reviews(
+        self,
+        sample_themes_for_extraction: list[dict]
+    ):
+        """Test extraction from RawReview objects."""
+        from src.phase2_classification.multi_theme_extractor import MultiThemeExtractor
+        from src.phase1_scraping.models import RawReview
+        from datetime import datetime
+        from src.shared.models import ReviewSource
+        
+        extractor = MultiThemeExtractor(themes=sample_themes_for_extraction)
+        
+        # Create RawReview objects
+        raw_reviews = [
+            RawReview(
+                id="raw_1",
+                source=ReviewSource.GOOGLE_PLAY,
+                rating=4,
+                text="The app works well and the UI is nice, but customer support is slow.",
+                timestamp=datetime.now(),
+                author_hash="hash1"
+            ),
+            RawReview(
+                id="raw_2",
+                source=ReviewSource.GOOGLE_PLAY,
+                rating=2,
+                text="App crashes frequently and trading orders fail to execute.",
+                timestamp=datetime.now(),
+                author_hash="hash2"
+            )
+        ]
+        
+        multi_theme_reviews = extractor.extract_from_raw_reviews(raw_reviews)
+        
+        assert len(multi_theme_reviews) == len(raw_reviews)
+        for mtr in multi_theme_reviews:
+            assert mtr.review_id in ["raw_1", "raw_2"]
+            assert isinstance(mtr.insights, list)
+    
+    @patch('src.phase2_classification.multi_theme_extractor.get_llm_client')
+    def test_extract_insights_with_mocked_llm(
+        self,
+        mock_get_client,
+        sample_themes_for_extraction: list[dict]
+    ):
+        """Test extraction with mocked LLM client (unit test)."""
+        from src.phase2_classification.multi_theme_extractor import MultiThemeExtractor
+        from datetime import datetime
+        
+        # Mock LLM client
+        mock_llm = Mock()
+        mock_llm.generate_json.return_value = {
+            "insights": [
+                {
+                    "theme_id": sample_themes_for_extraction[0]["id"],
+                    "theme_name": sample_themes_for_extraction[0]["name"],
+                    "sentiment": "negative",
+                    "confidence": 0.9,
+                    "source_text": "app crashes frequently"
+                }
+            ]
+        }
+        mock_get_client.return_value = mock_llm
+        
+        extractor = MultiThemeExtractor(themes=sample_themes_for_extraction)
+        
+        review = {
+            "id": "test_1",
+            "text": "The app crashes frequently when I try to view my portfolio.",
+            "rating": 2,
+            "timestamp": datetime.now(),
+            "source": "google_play",
+            "author_hash": "hash123"
+        }
+        
+        insights = extractor.extract_insights(review, retry_on_error=False)
+        
+        assert len(insights) == 1
+        assert insights[0].theme_id == sample_themes_for_extraction[0]["id"]
+        assert insights[0].sentiment == "negative"
+        assert insights[0].confidence == 0.9
+        assert insights[0].review_id == "test_1"
+        assert insights[0].review_rating == 2
+    
+    @patch('src.phase2_classification.multi_theme_extractor.get_llm_client')
+    def test_extract_insights_rejects_invalid_theme_id(
+        self,
+        mock_get_client,
+        sample_themes_for_extraction: list[dict]
+    ):
+        """Test that extractor rejects insights with invalid theme_ids."""
+        from src.phase2_classification.multi_theme_extractor import MultiThemeExtractor
+        from datetime import datetime
+        
+        # Mock LLM client returning invalid theme_id
+        mock_llm = Mock()
+        mock_llm.generate_json.return_value = {
+            "insights": [
+                {
+                    "theme_id": "invalid_theme_id_not_in_list",
+                    "theme_name": "Invalid Theme",
+                    "sentiment": "negative",
+                    "confidence": 0.9,
+                    "source_text": "some text"
+                },
+                {
+                    "theme_id": sample_themes_for_extraction[0]["id"],  # Valid one
+                    "theme_name": sample_themes_for_extraction[0]["name"],
+                    "sentiment": "positive",
+                    "confidence": 0.8,
+                    "source_text": "good text"
+                }
+            ]
+        }
+        mock_get_client.return_value = mock_llm
+        
+        extractor = MultiThemeExtractor(themes=sample_themes_for_extraction)
+        
+        review = {
+            "id": "test_1",
+            "text": "Some review text",
+            "rating": 3,
+            "timestamp": datetime.now(),
+            "source": "google_play",
+            "author_hash": "hash123"
+        }
+        
+        insights = extractor.extract_insights(review, retry_on_error=False)
+        
+        # Should only return the valid insight
+        assert len(insights) == 1
+        assert insights[0].theme_id == sample_themes_for_extraction[0]["id"]
+        assert "invalid_theme_id_not_in_list" not in [i.theme_id for i in insights]
+    
+    @patch('src.phase2_classification.multi_theme_extractor.get_llm_client')
+    def test_extract_insights_empty_review_text(
+        self,
+        mock_get_client,
+        sample_themes_for_extraction: list[dict]
+    ):
+        """Test extraction from review with empty text."""
+        from src.phase2_classification.multi_theme_extractor import MultiThemeExtractor
+        from datetime import datetime
+        
+        mock_llm = Mock()
+        mock_get_client.return_value = mock_llm
+        
+        extractor = MultiThemeExtractor(themes=sample_themes_for_extraction)
+        
+        review = {
+            "id": "test_empty",
+            "text": "",  # Empty text
+            "rating": 3,
+            "timestamp": datetime.now(),
+            "source": "google_play",
+            "author_hash": "hash123"
+        }
+        
+        insights = extractor.extract_insights(review, retry_on_error=False)
+        
+        # Should return empty list without calling LLM
+        assert insights == []
+        mock_llm.generate_json.assert_not_called()
+    
+    @patch('src.phase2_classification.multi_theme_extractor.get_llm_client')
+    def test_extract_insights_no_insights_returned(
+        self,
+        mock_get_client,
+        sample_themes_for_extraction: list[dict]
+    ):
+        """Test extraction when LLM returns no insights."""
+        from src.phase2_classification.multi_theme_extractor import MultiThemeExtractor
+        from datetime import datetime
+        
+        mock_llm = Mock()
+        mock_llm.generate_json.return_value = {"insights": []}  # Empty insights
+        mock_get_client.return_value = mock_llm
+        
+        extractor = MultiThemeExtractor(themes=sample_themes_for_extraction)
+        
+        review = {
+            "id": "test_no_insights",
+            "text": "This is a generic comment that doesn't match any theme.",
+            "rating": 4,
+            "timestamp": datetime.now(),
+            "source": "google_play",
+            "author_hash": "hash123"
+        }
+        
+        insights = extractor.extract_insights(review, retry_on_error=False)
+        
+        assert insights == []
+    
+    @patch('src.phase2_classification.multi_theme_extractor.get_llm_client')
+    def test_extract_insights_validates_sentiment(
+        self,
+        mock_get_client,
+        sample_themes_for_extraction: list[dict]
+    ):
+        """Test that extractor validates and corrects invalid sentiment."""
+        from src.phase2_classification.multi_theme_extractor import MultiThemeExtractor
+        from datetime import datetime
+        
+        mock_llm = Mock()
+        mock_llm.generate_json.return_value = {
+            "insights": [
+                {
+                    "theme_id": sample_themes_for_extraction[0]["id"],
+                    "theme_name": sample_themes_for_extraction[0]["name"],
+                    "sentiment": "invalid_sentiment",  # Invalid
+                    "confidence": 0.9,
+                    "source_text": "some text"
+                }
+            ]
+        }
+        mock_get_client.return_value = mock_llm
+        
+        extractor = MultiThemeExtractor(themes=sample_themes_for_extraction)
+        
+        review = {
+            "id": "test_1",
+            "text": "Some review text",
+            "rating": 3,
+            "timestamp": datetime.now(),
+            "source": "google_play",
+            "author_hash": "hash123"
+        }
+        
+        insights = extractor.extract_insights(review, retry_on_error=False)
+        
+        # Should default to "neutral" for invalid sentiment
+        assert len(insights) == 1
+        assert insights[0].sentiment == "neutral"
+    
+    @patch('src.phase2_classification.multi_theme_extractor.get_llm_client')
+    def test_extract_insights_validates_confidence(
+        self,
+        mock_get_client,
+        sample_themes_for_extraction: list[dict]
+    ):
+        """Test that extractor clamps confidence to [0.0, 1.0]."""
+        from src.phase2_classification.multi_theme_extractor import MultiThemeExtractor
+        from datetime import datetime
+        
+        mock_llm = Mock()
+        mock_llm.generate_json.return_value = {
+            "insights": [
+                {
+                    "theme_id": sample_themes_for_extraction[0]["id"],
+                    "theme_name": sample_themes_for_extraction[0]["name"],
+                    "sentiment": "positive",
+                    "confidence": 1.5,  # Out of range
+                    "source_text": "some text"
+                },
+                {
+                    "theme_id": sample_themes_for_extraction[0]["id"],
+                    "theme_name": sample_themes_for_extraction[0]["name"],
+                    "sentiment": "negative",
+                    "confidence": -0.5,  # Out of range
+                    "source_text": "some text"
+                }
+            ]
+        }
+        mock_get_client.return_value = mock_llm
+        
+        extractor = MultiThemeExtractor(themes=sample_themes_for_extraction)
+        
+        review = {
+            "id": "test_1",
+            "text": "Some review text",
+            "rating": 3,
+            "timestamp": datetime.now(),
+            "source": "google_play",
+            "author_hash": "hash123"
+        }
+        
+        insights = extractor.extract_insights(review, retry_on_error=False)
+        
+        assert len(insights) == 2
+        assert insights[0].confidence == 1.0  # Clamped from 1.5
+        assert insights[1].confidence == 0.0  # Clamped from -0.5
+    
+    @patch('src.phase2_classification.multi_theme_extractor.get_llm_client')
+    def test_extract_all_reviews_batch(
+        self,
+        mock_get_client,
+        sample_themes_for_extraction: list[dict]
+    ):
+        """Test batch extraction with mocked LLM."""
+        from src.phase2_classification.multi_theme_extractor import MultiThemeExtractor
+        from datetime import datetime
+        
+        mock_llm = Mock()
+        # Return different insights for each review
+        mock_llm.generate_json.side_effect = [
+            {
+                "insights": [
+                    {
+                        "theme_id": sample_themes_for_extraction[0]["id"],
+                        "theme_name": sample_themes_for_extraction[0]["name"],
+                        "sentiment": "negative",
+                        "confidence": 0.9,
+                        "source_text": "crashes"
+                    }
+                ]
+            },
+            {
+                "insights": [
+                    {
+                        "theme_id": sample_themes_for_extraction[1]["id"] if len(sample_themes_for_extraction) > 1 else sample_themes_for_extraction[0]["id"],
+                        "theme_name": sample_themes_for_extraction[1]["name"] if len(sample_themes_for_extraction) > 1 else sample_themes_for_extraction[0]["name"],
+                        "sentiment": "positive",
+                        "confidence": 0.8,
+                        "source_text": "great ui"
+                    }
+                ]
+            }
+        ]
+        mock_get_client.return_value = mock_llm
+        
+        extractor = MultiThemeExtractor(themes=sample_themes_for_extraction, batch_size=2)
+        
+        reviews = [
+            {
+                "id": "review_1",
+                "text": "App crashes frequently",
+                "rating": 2,
+                "timestamp": datetime.now(),
+                "source": "google_play",
+                "author_hash": "hash1"
+            },
+            {
+                "id": "review_2",
+                "text": "Great user interface",
+                "rating": 5,
+                "timestamp": datetime.now(),
+                "source": "google_play",
+                "author_hash": "hash2"
+            }
+        ]
+        
+        multi_theme_reviews = extractor.extract_all_reviews(reviews)
+        
+        assert len(multi_theme_reviews) == 2
+        assert multi_theme_reviews[0].review_id == "review_1"
+        assert multi_theme_reviews[1].review_id == "review_2"
+        assert len(multi_theme_reviews[0].insights) == 1
+        assert len(multi_theme_reviews[1].insights) == 1
+        # Check primary_theme is set (should be the theme with highest confidence)
+        assert multi_theme_reviews[0].primary_theme == sample_themes_for_extraction[0]["id"]

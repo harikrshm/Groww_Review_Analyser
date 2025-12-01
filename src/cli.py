@@ -15,6 +15,7 @@ from src.phase3_summary.pipeline import Phase3Pipeline
 from src.phase4_email.pipeline import Phase4Pipeline
 from src.phase2_classification.week_clusterer import WeekClusterer
 from src.shared.utils import load_json_file
+from src.shared.theme_loader import load_themes, ThemeValidationError
 
 # Setup logging
 logging.basicConfig(
@@ -55,12 +56,15 @@ def _get_weeks_in_range(start_date: datetime, end_date: datetime) -> List[str]:
     return weeks
 
 
+
+
 @app.command()
 def generate(
     start_date: str = typer.Argument(..., help="Start date (YYYY-MM-DD)"),
     end_date: str = typer.Argument(..., help="End date (YYYY-MM-DD)"),
     reviews_file: str = typer.Option("data/raw/reviews_2025-11-27.json", "--reviews", "-r", help="Path to raw reviews JSON file"),
     output_dir: str = typer.Option("data/classified", "--output", "-o", help="Output directory for classified data"),
+    themes: Optional[str] = typer.Option(None, "--themes", "-t", help="Themes: file path to JSON file or inline JSON string"),
 ):
     """Generate report for a custom date range."""
     console.print(f"[bold blue]Generating report for {start_date} to {end_date}[/bold blue]")
@@ -72,13 +76,49 @@ def generate(
     weeks = _get_weeks_in_range(start_dt, end_dt)
     console.print(f"[green]Found {len(weeks)} weeks: {', '.join(weeks)}[/green]")
     
+    # Load and validate themes if provided
+    validated_themes = None
+    if themes:
+        try:
+            validated_themes = load_themes(
+                source=themes,
+                auto_enrich=True,
+                context="financial trading app (Groww)"
+            )
+            console.print(f"[green]✓ Loaded and validated {len(validated_themes)} theme(s)[/green]")
+        except ThemeValidationError as e:
+            console.print(f"[red]Theme validation error:[/red]")
+            console.print(f"[red]{str(e)}[/red]")
+            console.print(f"\n[yellow]Required fields: id, name, keywords[/yellow]")
+            console.print(f"[yellow]Optional fields: description[/yellow]")
+            raise typer.Exit(1)
+        except Exception as e:
+            console.print(f"[red]Error loading themes: {e}[/red]")
+            raise typer.Exit(1)
+    
     # Check if reviews file exists
     if not Path(reviews_file).exists():
         console.print(f"[red]Error: Reviews file not found: {reviews_file}[/red]")
         raise typer.Exit(1)
     
-    # Initialize pipelines
-    clustering_pipeline = ClusteringPipeline(output_dir=output_dir)
+    # Load default themes if not provided
+    if validated_themes is None:
+        try:
+            validated_themes = load_themes(
+                source="config/themes.json",
+                auto_enrich=True,
+                context="financial trading app (Groww)"
+            )
+            console.print(f"[green]✓ Using default themes from config/themes.json ({len(validated_themes)} theme(s))[/green]")
+        except Exception as e:
+            console.print(f"[red]Error loading default themes: {e}[/red]")
+            raise typer.Exit(1)
+    
+    # Initialize clustering pipeline with themes
+    clustering_pipeline = ClusteringPipeline(
+        themes=validated_themes,
+        output_dir=output_dir
+    )
     
     # Process each week
     console.print("\n[bold]Processing weeks...[/bold]")
@@ -89,7 +129,13 @@ def generate(
                 input_file=reviews_file,
                 target_week=week_id
             )
-            console.print(f"[green]✓ {week_id}: {weekly_clusters.metadata.total_reviews} reviews, {clusters_report.total_clusters} clusters[/green]")
+            # Display appropriate statistics based on clustering type
+            clustering_type = clusters_report.clustering_type if hasattr(clusters_report, 'clustering_type') else "review"
+            if clustering_type == "insight":
+                total_insights = weekly_clusters.metadata.total_insights if hasattr(weekly_clusters.metadata, 'total_insights') else 0
+                console.print(f"[green]✓ {week_id}: {weekly_clusters.metadata.total_reviews} reviews, {total_insights} insights, {clusters_report.total_clusters} clusters[/green]")
+            else:
+                console.print(f"[green]✓ {week_id}: {weekly_clusters.metadata.total_reviews} reviews, {clusters_report.total_clusters} clusters[/green]")
         except Exception as e:
             console.print(f"[red]✗ {week_id}: Error - {e}[/red]")
             continue
@@ -109,7 +155,19 @@ def preview(
     
     # Auto-detect clusters file if not provided
     if clusters_file is None:
-        clusters_file = f"data/classified/clusters_{week_id}_report.json"
+        classified_dir = Path("data/classified")
+        # Try insight report first (new format)
+        insight_file = classified_dir / f"insights_{week_id}_report.json"
+        review_file = classified_dir / f"clusters_{week_id}_report.json"
+        
+        if insight_file.exists():
+            clusters_file = str(insight_file)
+            console.print(f"[green]Auto-detected insight cluster report: {clusters_file}[/green]")
+        elif review_file.exists():
+            clusters_file = str(review_file)
+            console.print(f"[green]Auto-detected review cluster report: {clusters_file}[/green]")
+        else:
+            clusters_file = str(review_file)  # Default to review format for error message
     
     # Check if files exist
     if not Path(reviews_file).exists():
@@ -119,16 +177,28 @@ def preview(
     if not Path(clusters_file).exists():
         console.print(f"[red]Error: Clusters file not found: {clusters_file}[/red]")
         console.print(f"[yellow]Hint: Run 'generate' command first to create clusters[/yellow]")
+        console.print(f"[yellow]Expected files:[/yellow]")
+        console.print(f"[yellow]  - data/classified/insights_{week_id}_report.json (insight-based)[/yellow]")
+        console.print(f"[yellow]  - data/classified/clusters_{week_id}_report.json (review-based)[/yellow]")
         raise typer.Exit(1)
     
     # Generate report
     phase3_pipeline = Phase3Pipeline()
     try:
-        html_report_path = phase3_pipeline.run(
-            week_id=week_id,
-            clusters_file=clusters_file,
-            reviews_file=reviews_file
-        )
+        # Determine if this is an insight report
+        is_insight_report = "insights_" in clusters_file
+        if is_insight_report:
+            html_report_path = phase3_pipeline.run(
+                week_id=week_id,
+                insight_clusters_file=clusters_file,
+                reviews_file=reviews_file
+            )
+        else:
+            html_report_path = phase3_pipeline.run(
+                week_id=week_id,
+                clusters_file=clusters_file,
+                reviews_file=reviews_file
+            )
         
         console.print(f"\n[bold green]✓ Report generated successfully![/bold green]")
         console.print(f"HTML Report: {html_report_path}")
@@ -153,7 +223,19 @@ def send(
     
     # Auto-detect clusters file if not provided
     if clusters_file is None:
-        clusters_file = f"data/classified/clusters_{week_id}_report.json"
+        classified_dir = Path("data/classified")
+        # Try insight report first (new format)
+        insight_file = classified_dir / f"insights_{week_id}_report.json"
+        review_file = classified_dir / f"clusters_{week_id}_report.json"
+        
+        if insight_file.exists():
+            clusters_file = str(insight_file)
+            console.print(f"[green]Auto-detected insight cluster report: {clusters_file}[/green]")
+        elif review_file.exists():
+            clusters_file = str(review_file)
+            console.print(f"[green]Auto-detected review cluster report: {clusters_file}[/green]")
+        else:
+            clusters_file = str(review_file)  # Default to review format for error message
     
     # Check if files exist
     if not Path(reviews_file).exists():
@@ -163,6 +245,9 @@ def send(
     if not Path(clusters_file).exists():
         console.print(f"[red]Error: Clusters file not found: {clusters_file}[/red]")
         console.print(f"[yellow]Hint: Run 'generate' command first to create clusters[/yellow]")
+        console.print(f"[yellow]Expected files:[/yellow]")
+        console.print(f"[yellow]  - data/classified/insights_{week_id}_report.json (insight-based)[/yellow]")
+        console.print(f"[yellow]  - data/classified/clusters_{week_id}_report.json (review-based)[/yellow]")
         raise typer.Exit(1)
     
     # Initialize email pipeline

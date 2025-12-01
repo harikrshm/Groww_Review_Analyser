@@ -1,0 +1,31 @@
+You are an expert in analyzing app store reviews and identifying meaningful themes. Your task is to generate a clear, concise description for a theme that will be used to classify user reviews.
+
+## Theme Information
+
+**Theme ID:** {{ theme_id }}
+**Theme Name:** {{ theme_name }}
+**Keywords:** {{ keywords|join(', ') }}
+**Context:** {{ context }}
+
+## Your Task
+
+Generate a clear, concise description (2-4 sentences) for this theme that:
+1. Explains what the theme represents
+2. Describes what types of user feedback or issues it captures
+3. Provides context about why this theme is important for understanding user sentiment
+4. Is specific enough to help classify reviews accurately
+
+The description should be written in a way that helps an LLM understand when a review should be classified under this theme.
+
+## Guidelines
+
+- Be specific and actionable
+- Focus on what user feedback this theme captures
+- Avoid vague or generic language
+- Keep it concise (2-4 sentences maximum)
+- Write in third person
+
+## Output Format
+
+Provide only the description text, without any additional formatting, quotes, or explanations. Just the description itself.
+

@@ -1,0 +1,82 @@
+You are an expert at analyzing app store reviews and extracting multiple theme-sentiment insights from a single review. Your task is to identify ALL themes mentioned in the review and extract the sentiment for each theme.
+
+## Review to Analyze
+
+**Review Text:** {{ review_text }}
+**Rating:** {{ rating }} stars
+**Review ID:** {{ review_id }}
+
+## Available Themes
+
+{% for theme in themes %}
+### {{ theme.name }} (ID: {{ theme.id }})
+**Description:** {{ theme.description }}
+**Keywords:** {{ theme.keywords|join(', ') }}
+
+{% endfor %}
+
+## Your Task
+
+Extract ALL theme-sentiment pairs from this review. A single review can mention multiple themes, and each theme can have its own sentiment (positive, negative, or neutral).
+
+**IMPORTANT RULES:**
+1. **ONLY map to themes from the provided list above** - Do NOT create new themes or use theme IDs that are not in the list
+2. **Extract ALL themes mentioned** - If a review discusses multiple topics, extract insights for each one
+3. **Determine sentiment per theme** - Each theme can have a different sentiment in the same review
+4. **Provide exact source text** - Quote the exact phrase from the review that supports each insight
+5. **If no themes match, return an empty insights array**
+
+## Example
+
+**Review:** "The app is fast and the UI is beautiful, but the fees are too high and customer support never responds."
+
+**Extracted Insights:**
+- Theme: "Performance" → Sentiment: "positive" → Source: "The app is fast"
+- Theme: "User Interface" → Sentiment: "positive" → Source: "the UI is beautiful"
+- Theme: "Fees & Pricing" → Sentiment: "negative" → Source: "the fees are too high"
+- Theme: "Customer Support" → Sentiment: "negative" → Source: "customer support never responds"
+
+## Sentiment Guidelines
+
+- **Positive**: Praise, satisfaction, appreciation, positive experiences
+- **Negative**: Complaints, dissatisfaction, problems, issues, frustration
+- **Neutral**: Factual statements, neutral observations, neither positive nor negative
+
+## Output Format
+
+Respond ONLY with valid JSON (no markdown, no explanation):
+
+```json
+{
+  "insights": [
+    {
+      "theme_id": "performance",
+      "theme_name": "Performance & Speed",
+      "sentiment": "positive",
+      "confidence": 0.9,
+      "source_text": "The app is fast"
+    },
+    {
+      "theme_id": "user_interface",
+      "theme_name": "User Interface & Design",
+      "sentiment": "positive",
+      "confidence": 0.85,
+      "source_text": "the UI is beautiful"
+    }
+  ]
+}
+```
+
+**Field Requirements:**
+- `theme_id`: MUST be one of the provided theme IDs: {% for theme in themes %}{{ theme.id }}{% if not loop.last %}, {% endif %}{% endfor %}
+- `theme_name`: The name of the theme (from the provided list)
+- `sentiment`: One of "positive", "negative", or "neutral"
+- `confidence`: A number between 0.0 and 1.0 indicating how certain you are about this insight
+- `source_text`: The exact phrase or sentence from the review that supports this insight (quote it verbatim)
+- `insights`: An array of all theme-sentiment pairs found (can be empty if no themes match)
+
+**Validation:**
+- If a review mentions themes NOT in the provided list, DO NOT include them
+- If a review has no clear themes, return `{"insights": []}`
+- Each insight must have a unique combination of theme_id and sentiment (if the same theme appears with different sentiments, create separate insights)
+

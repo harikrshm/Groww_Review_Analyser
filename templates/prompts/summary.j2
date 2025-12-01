@@ -6,13 +6,21 @@ Your goal is to synthesize weekly review data into a one-page executive summary 
 CONTEXT:
 - Period: {{ date_range }}
 - Total Reviews: {{ total_reviews }}
+{% if is_insight_based and total_insights %}
+- Total Insights: {{ total_insights }} (multi-theme insights extracted from reviews)
+{% endif %}
 
-INPUT CLUSTERS (Grouped by Theme):
+INPUT CLUSTERS (Grouped by Theme{% if is_insight_based %} and Sentiment{% endif %}):
 {% for cluster in clusters %}
 Cluster {{ loop.index }}: {{ cluster.label }}
 - Theme: {{ cluster.theme_name }} ({{ cluster.theme_id }})
+{% if is_insight_based %}
+- Sentiment: {{ cluster.sentiment|title }} ({{ cluster.sentiment }})
+- Size: {{ cluster.size }} insights{% if total_insights and total_insights > 0 %} ({{ "%.1f"|format((cluster.size / total_insights * 100)) }}% of total insights){% endif %}
+{% else %}
 - Size: {{ cluster.size }} reviews ({{ "%.1f"|format((cluster.size / total_reviews * 100)) }}% of total)
 - Sentiment: {{ "Positive" if cluster.avg_rating >= 3.5 else "Negative" }} (Rating: {{ cluster.avg_rating }}/5)
+{% endif %}
 - Summary: {{ cluster.summary }}
 - Key Issues: {{ cluster.key_issues | join(", ") }}
 - Representative Quotes:
@@ -27,23 +35,33 @@ Generate a structured JSON response for the "Weekly Pulse" report with the follo
 
 1. **title**: A creative, catchy headline that is UNIQUE to this period's specific data. Base it on the actual cluster summaries and key issues provided. Do NOT use generic titles. Do NOT mention week numbers (e.g., "Week 47", "Week 48", "W47"). Instead, reference the time period naturally using month names (e.g., "App Crashes Dominate November as Fee Complaints Surge").
 2. **executive_summary**: A concise paragraph (max 150 words) summarizing the overall trends, major wins, and critical issues. 
-   - MUST include specific numbers and statistics (e.g., "24 users reported app crashes", "17% of reviews mentioned fees", "3 clusters focused on performance issues", "41 reviews out of 109").
+   - MUST include specific numbers and statistics{% if is_insight_based %} (e.g., "24 insights about app crashes", "17% of insights mentioned fees", "3 clusters focused on performance issues", "41 insights out of 109 total insights"){% else %} (e.g., "24 users reported app crashes", "17% of reviews mentioned fees", "3 clusters focused on performance issues", "41 reviews out of 109"){% endif %}.
    - Use quantitative language like a data scientist would: percentages, counts, distributions, ratios.
-   - Reference cluster sizes, review counts, theme distributions, and user impact numbers to support your analysis.
+   - Reference cluster sizes, {% if is_insight_based %}insight counts, theme-sentiment distributions{% else %}review counts, theme distributions{% endif %}, and user impact numbers to support your analysis.
+   {% if is_insight_based %}- Note: A single review can contain multiple insights across different themes and sentiments. Count insights, not reviews, when analyzing theme distribution.{% endif %}
    - Write with the authority and precision of a 20-year experienced analyst.
    - Do NOT use phrases like "this week" or "this period" - just state the facts directly.
-3. **positive_insights**: Select top 3 themes that are WORKING well. For each:
+3. **positive_insights**: Select top 3 themes that are WORKING well{% if is_insight_based %} (focus on clusters with positive sentiment){% endif %}. For each:
    - `theme_name`: Name of the positive aspect (e.g., "Ease of Use", "Quick KYC")
-   - `representative_quote`: A real user quote from the input that best captures this positivity (keep it short).
+   - `representative_quote`: A real user quote from the input that best captures this positivity (keep it short).{% if is_insight_based %} These quotes come from insight source_text, which are specific phrases from reviews.{% endif %}
    - `inference`: A one-line professional inference derived from the quote (e.g., "Users value the simplified dashboard for quick analysis").
-4. **negative_insights**: Select top 3 themes that NEED IMPROVEMENT. For each:
+4. **negative_insights**: Select top 3 themes that NEED IMPROVEMENT{% if is_insight_based %} (focus on clusters with negative sentiment){% endif %}. For each:
    - `theme_name`: Name of the issue (e.g., "Order Latency", "Support Delays")
-   - `representative_quote`: A real user quote capturing the pain point.
+   - `representative_quote`: A real user quote capturing the pain point.{% if is_insight_based %} These quotes come from insight source_text, which are specific phrases from reviews.{% endif %}
    - `inference`: A one-line inference on the impact (e.g., "Critical latency during market open causes financial loss").
 5. **action_plan**: Top 3 prioritized action items based on this period's specific negative insights. Make them specific and actionable based on the actual cluster data provided. Do NOT use generic action items.
    - `priority`: 1 (Highest) to 3.
-   - `description`: Specific action to take based on the actual issues in the clusters (e.g., "Fix app crashes during order execution - 17 users affected"). Do NOT mention "this week" or week numbers.
+   - `description`: Specific action to take based on the actual issues in the clusters{% if is_insight_based %} (e.g., "Fix app crashes during order execution - 17 insights mentioning this issue"){% else %} (e.g., "Fix app crashes during order execution - 17 users affected"){% endif %}. Do NOT mention "this week" or week numbers.
    - `theme_id`: Related theme ID from the clusters.
+{% if is_insight_based %}
+
+IMPORTANT NOTES FOR INSIGHT-BASED ANALYSIS:
+- Each review can contain multiple insights across different themes and sentiments
+- Count insights, not reviews, when analyzing theme distribution
+- A review might have both positive and negative insights for different themes
+- Focus on the sentiment of each insight cluster when categorizing positive vs negative
+- Use insight counts and percentages in your analysis, not review counts
+{% endif %}
 
 OUTPUT FORMAT:
 Return ONLY valid JSON matching this structure:

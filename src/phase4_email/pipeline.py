@@ -82,7 +82,7 @@ class Phase4Pipeline:
         
         Args:
             week_id: ISO week ID (e.g., "2025-W47")
-            clusters_report_path: Path to clusters_report.json from Phase 2
+            clusters_report_path: Path to clusters_report.json from Phase 2 (can be insight or review format)
             raw_reviews_path: Path to raw reviews JSON from Phase 1
             dry_run: If True, generate email but don't send
             
@@ -92,14 +92,24 @@ class Phase4Pipeline:
         try:
             logger.info(f"Generating and sending weekly report for {week_id}...")
             
+            # Determine if this is an insight report
+            is_insight_report = "insights_" in clusters_report_path
+            
             # Step 1: Generate report (Phase 3)
             # Note: Phase3Pipeline.run() returns only the HTML report path
             # We'll infer the summary JSON and graph paths from week_id
-            html_report_path = Path(self.phase3_pipeline.run(
-                week_id=week_id,
-                clusters_file=clusters_report_path,
-                reviews_file=raw_reviews_path
-            ))
+            if is_insight_report:
+                html_report_path = Path(self.phase3_pipeline.run(
+                    week_id=week_id,
+                    insight_clusters_file=clusters_report_path,
+                    reviews_file=raw_reviews_path
+                ))
+            else:
+                html_report_path = Path(self.phase3_pipeline.run(
+                    week_id=week_id,
+                    clusters_file=clusters_report_path,
+                    reviews_file=raw_reviews_path
+                ))
             
             # Infer paths for summary JSON and graph
             summary_json_path = self.phase3_pipeline.json_dir / f"summary_{week_id}.json"

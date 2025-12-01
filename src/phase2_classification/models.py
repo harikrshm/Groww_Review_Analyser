@@ -62,10 +62,12 @@ class ClusteringMetadata(BaseModel):
     week_id: str = Field(..., description="Target week ID")
     source_file: str = Field(..., description="Source Phase 1 JSON file")
     total_reviews: int = Field(default=0, description="Total reviews processed")
+    total_insights: int = Field(default=0, description="Total insights extracted (for insight-based clustering)")
     clusters_formed: int = Field(default=0, description="Number of clusters formed")
     noise_count: int = Field(default=0, description="Reviews marked as noise")
     unmapped_count: int = Field(default=0, description="Reviews that couldn't be mapped")
     llm_calls: int = Field(default=0, description="Number of LLM API calls made")
+    clustering_type: str = Field(default="review", description="Type of clustering: 'review' or 'insight'")
     
     # Pipeline configuration
     embedding_model: str = Field(default="all-MiniLM-L6-v2", description="Embedding model used")
@@ -79,13 +81,21 @@ class WeeklyClustersOutput(BaseModel):
     
     metadata: ClusteringMetadata = Field(..., description="Clustering metadata")
     reviews: List[ClusteredReview] = Field(default_factory=list, description="All reviews with cluster/theme assignments")
+    multi_theme_reviews: List[MultiThemeReview] = Field(
+        default_factory=list,
+        description="Reviews with multi-theme insights (for insight-based clustering)"
+    )
     theme_quotes: Dict[str, List[str]] = Field(
         default_factory=dict, 
         description="Representative quotes per theme"
     )
     
     # Statistics
-    theme_distribution: Dict[str, int] = Field(default_factory=dict, description="Count per theme")
+    theme_distribution: Dict[str, int] = Field(default_factory=dict, description="Count per theme (reviews or insights)")
+    theme_sentiment_distribution: Dict[str, Dict[str, int]] = Field(
+        default_factory=dict,
+        description="Count per theme-sentiment pair (for insight-based clustering)"
+    )
     rating_distribution: Dict[str, int] = Field(default_factory=dict, description="Count per rating")
 
 
@@ -95,7 +105,78 @@ class ClustersReport(BaseModel):
     week_id: str = Field(..., description="Target week ID")
     generated_at: datetime = Field(default_factory=datetime.now, description="When report was generated")
     total_clusters: int = Field(default=0, description="Total clusters formed")
-    clusters: List[ClusterInfo] = Field(default_factory=list, description="Detailed cluster information")
+    clusters: List[ClusterInfo] = Field(default_factory=list, description="Detailed cluster information (review-based)")
+    insight_clusters: List[InsightCluster] = Field(
+        default_factory=list,
+        description="Insight clusters (for insight-based clustering)"
+    )
+    clustering_type: str = Field(default="review", description="Type of clustering: 'review' or 'insight'")
+
+
+# =============================================================================
+# Multi-Theme Insight Extraction Models
+# =============================================================================
+
+class ThemeSentimentInsight(BaseModel):
+    """A single theme-sentiment insight extracted from a review."""
+    
+    theme_id: str = Field(..., description="Theme ID this insight maps to")
+    theme_name: str = Field(..., description="Theme name for readability")
+    sentiment: str = Field(..., description="Sentiment: 'positive', 'negative', or 'neutral'")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Extraction confidence (0.0-1.0)")
+    source_text: str = Field(..., description="Exact phrase from review that supports this insight")
+    review_id: str = Field(..., description="ID of the review this insight came from")
+    review_rating: int = Field(..., ge=1, le=5, description="Rating of the source review (1-5)")
+
+
+class MultiThemeReview(BaseModel):
+    """A review that can map to multiple themes with different sentiments."""
+    
+    review_id: str = Field(..., description="Unique review identifier")
+    original_text: str = Field(..., description="Original review text content")
+    rating: int = Field(..., ge=1, le=5, description="Star rating (1-5)")
+    timestamp: datetime = Field(..., description="When the review was posted")
+    source: str = Field(..., description="Source store (google_play)")
+    insights: List[ThemeSentimentInsight] = Field(
+        default_factory=list,
+        description="List of theme-sentiment insights extracted from this review"
+    )
+    primary_theme: Optional[str] = Field(
+        default=None,
+        description="Primary theme ID if one insight is dominant (optional)"
+    )
+    
+    @computed_field
+    @property
+    def week_id(self) -> str:
+        """Get ISO week identifier (e.g., '2025-W47')."""
+        iso = self.timestamp.isocalendar()
+        return f"{iso[0]}-W{iso[1]:02d}"
+
+
+class InsightCluster(BaseModel):
+    """A cluster of similar insights (not reviews)."""
+    
+    cluster_id: int = Field(..., description="Cluster identifier")
+    theme_id: str = Field(..., description="Theme ID for this cluster")
+    theme_name: str = Field(..., description="Theme name for readability")
+    sentiment: str = Field(..., description="Sentiment: 'positive', 'negative', or 'neutral'")
+    size: int = Field(..., description="Number of insights in this cluster")
+    label: str = Field(..., description="LLM-generated cluster label")
+    summary: str = Field(..., description="LLM-generated cluster summary")
+    key_issues: List[str] = Field(
+        default_factory=list,
+        description="Key issues or points identified in this cluster"
+    )
+    representative_insights: List[ThemeSentimentInsight] = Field(
+        default_factory=list,
+        description="Representative insights from this cluster (top confidence)"
+    )
+    avg_confidence: float = Field(default=0.0, description="Average confidence of insights in cluster")
+    review_ids: List[str] = Field(
+        default_factory=list,
+        description="Unique review IDs that contributed insights to this cluster"
+    )
 
 
 # =============================================================================

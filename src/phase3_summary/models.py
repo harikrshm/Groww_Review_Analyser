@@ -22,6 +22,7 @@ class WeeklyPulseSummary(BaseModel):
     week_id: str
     date_range: str
     total_reviews: int
+    total_insights: Optional[int] = Field(default=None, description="Total insights (for insight-based clustering)")
     
     # Header
     title: str = Field(..., description="Creative title like 'Trading Glitches Overshadow UI'")

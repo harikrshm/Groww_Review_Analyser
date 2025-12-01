@@ -55,15 +55,26 @@ class EmailScheduler:
         latest_raw = raw_files[0]
         
         # Find latest clusters report (should match latest week)
+        # Prefer insight reports over review reports
         classified_dir = self.data_dir / "classified"
-        report_files = sorted(classified_dir.glob("*_report.json"), reverse=True)
-        if not report_files:
+        
+        # Try insight reports first (new format)
+        insight_reports = sorted(classified_dir.glob("insights_*_report.json"), reverse=True)
+        review_reports = sorted(classified_dir.glob("clusters_*_report.json"), reverse=True)
+        
+        if insight_reports:
+            latest_report = insight_reports[0]
+            # Extract week_id from filename (e.g., "insights_2025-W47_report.json")
+            week_id = latest_report.stem.replace("_report", "").replace("insights_", "")
+            logger.info(f"Found insight cluster report: {latest_report.name}")
+        elif review_reports:
+            latest_report = review_reports[0]
+            # Extract week_id from filename (e.g., "clusters_2025-W47_report.json")
+            week_id = latest_report.stem.replace("_report", "").replace("clusters_", "")
+            logger.info(f"Found review cluster report: {latest_report.name}")
+        else:
             logger.warning("No cluster report files found")
             return None
-        
-        # Extract week_id from report filename (e.g., "clusters_2025-W47_report.json")
-        latest_report = report_files[0]
-        week_id = latest_report.stem.replace("_report", "").replace("clusters_", "")
         
         return (week_id, str(latest_report), str(latest_raw))
     
