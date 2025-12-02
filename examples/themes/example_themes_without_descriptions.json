@@ -1,0 +1,28 @@
+{
+  "version": "1.0.0",
+  "themes": [
+    {
+      "id": "ui",
+      "name": "User Interface",
+      "keywords": [
+        "ui", "interface", "design", "layout", "navigation",
+        "easy", "simple", "intuitive", "user-friendly"
+      ]
+    },
+    {
+      "id": "speed",
+      "name": "App Speed",
+      "keywords": [
+        "slow", "fast", "speed", "lag", "performance", "responsive"
+      ]
+    },
+    {
+      "id": "cost",
+      "name": "Cost",
+      "keywords": [
+        "fee", "fees", "brokerage", "charge", "expensive", "cheap"
+      ]
+    }
+  ]
+}
+

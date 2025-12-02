@@ -1,0 +1,139 @@
+{
+  "metadata": {
+    "app_name": "Groww",
+    "app_ids": {
+      "google_play": "com.nextbillion.groww",
+      "apple_store": "1404871703",
+      "apple_store_country": "in"
+    },
+    "scrape_timestamp": "2025-11-27T20:13:27.874486",
+    "date_range": {
+      "start": "2025-09-04T20:13:27.874106",
+      "end": "2025-11-27T20:13:27.874106",
+      "weeks_covered": 12
+    },
+    "processing": {
+      "total_scraped": 5983,
+      "after_junk_filter": 1318,
+      "after_deduplication": 1317,
+      "final_count": 1317
+    },
+    "version": "1.0.0"
+  },
+  "statistics": {
+    "total_reviews": 1317,
+    "by_source": {
+      "google_play": 1317,
+      "apple_store": 0
+    },
+    "by_rating": {
+      "1": 728,
+      "2": 80,
+      "3": 98,
+      "4": 126,
+      "5": 285
+    },
+    "by_rating_group": {
+      "positive": 411,
+      "neutral": 98,
+      "negative": 808
+    },
+    "by_week": {
+      "2025-W48": 36,
+      "2025-W47": 109,
+      "2025-W46": 85,
+      "2025-W45": 98,
+      "2025-W44": 78,
+      "2025-W43": 103,
+      "2025-W42": 144,
+      "2025-W41": 114,
+      "2025-W40": 152,
+      "2025-W39": 93,
+      "2025-W38": 113,
+      "2025-W37": 145,
+      "2025-W36": 47
+    },
+    "average_rating": 2.36
+  },
+  "reviews": [
+    {
+      "id": "gp_3349ce07-40e9-4cef-8ce6-4c734d3d4916",
+      "source": "google_play",
+      "rating": 5,
+      "text": "Delivery Free kijiye Groww BEST 🥰🥰 है,बेहद ईमानदार एप्लीकेशन है 💝💝🤗🤗✅✅✅✅💫 (internal,words )बड़े        कीजिए👏👏बहुत ही सरल है,,और कभी खुलने में दिक्कत नहीं करता,बहुत आसान है 💞💞🇾🇪          🇪 🤟😍😍🤟🤟💯💯💯💯🤗🤗🤗 10 star app,,,नए लोगों को जरूर इसे use करना चाहिए,इसकी    सरलता और सहजता ही इसकी ताकत है,,,,बहुत ही सुंदर एप्लीकेशन,👌👌🥳🥳 ,बेहद ही खूबस       सूरत और ग्राहक मददगार,,तुरंत सुनवाई करते हैं,,,और वर्किंग टाइम के बाद भी समस्या क           का समाधान तुरंत करते हैं,,चैट की सुविधा इसको सबसे बेहतरीन बना देती है,,🌹🌹",
+      "timestamp": "2025-11-08T20:41:40",
+      "author_hash": "[REDACTED]",
+      "char_count": 466,
+      "word_count": 74,
+      "helpful_count": 1768,
+      "rating_group": "positive",
+      "week_id": "2025-W45"
+    },
+    {
+      "id": "gp_2bd70c8b-53a2-4b35-8db2-e14e86398508",
+      "source": "google_play",
+      "rating": 5,
+      "text": "Hey Groww team, I have one request for a new feature: could you integrate AI inside the app that can analyze my portfolio, my stocks, and give a detailed understanding of the price of every stock on a day-to-day basis? I rely on Perplexity to understand why a stock is going up or down daily, but if you have an AI that does everything for me, I would like An AI that provides me with current insights of news and stocks movements and provide for investment and trading advice, I need it. 🤖🧠🫂",
+      "timestamp": "2025-11-04T14:47:266",
+      "author_hash": "[REDACTED]",
+      "char_count": 492,
+      "word_count": 93,
+      "helpful_count": 436,
+      "rating_group": "positive",
+      "week_id": "2025-W45"
+    },
+    {
+      "id": "gp_8f7f1e0e-9ab4-493b-8121-0d556f19f61f",
+      "source": "google_play",
+      "rating": 4,
+      "text": "Everything is so so good about your app except one thing- it's speed is slow and sometimes it gets hanged, or the prices are not getting refreshed...This problem is persistent since the last 2-3 weeks...Or else full marks on everything else- it's super user- friendly, easy to use and trade!!",
+      "timestamp": "2025-11-09T10:07:27",
+      "author_hash": "[REDACTED]",
+      "char_count": 292,
+      "word_count": 50,
+      "helpful_count": 254,
+      "rating_group": "positive",
+      "week_id": "2025-W45"
+    },
+    {
+      "id": "gp_724ab1f6-8723-47cc-8648-e628acff076e",
+      "source": "google_play",
+      "rating": 2,
+      "text": "groww price alerts are useless. first of all it only valid for 30 days, secondly - you can't view all alerts in a single page. For example if i created an alert for 450rs and if it comes to 445 i won't be able to know unless i remember about this alert. if they are shown in a single page atleast I can see and sell at 445 instead of waiting for 450. share price might come down before reaching 450 right.",
+      "timestamp": "2025-11-03T22:36:00",
+      "author_hash": "[REDACTED]",
+      "char_count": 405,
+      "word_count": 82,
+      "helpful_count": 96,
+      "rating_group": "negative",
+      "week_id": "2025-W45"
+    },
+    {
+      "id": "gp_eeb00f3e-9f03-4d63-a008-294dcf7dc573",
+      "source": "google_play",
+      "rating": 1,
+      "text": "Very disappointing experience with Groww. The withdrawal system is extremely slow — it takes days to get money back, which is unacceptable for a trading platform. On top of that, the charges are quite high compared to other apps. The customer support is unhelpful and response time is poor. Not recommended for serious traders. Needs a lot of improvement.",
+      "timestamp": "2025-11-05T16:49:02",
+      "author_hash": "[REDACTED]",
+      "char_count": 355,
+      "word_count": 59,
+      "helpful_count": 26,
+      "rating_group": "negative",
+      "week_id": "2025-W45"
+    },
+    {
+      "id": "gp_e541f7e2-c76e-4a91-915b-0009cca0d412",
+      "source": "google_play",
+      "rating": 1,
+      "text": "The charts are not getting updated instantly.There is a lot of delay in charts and execution of trades from the past few days. Most of the times the app is getting crashed during peek trading hours due to which there is a lot of impact on price moments.",
+      "timestamp": "2025-11-04T09:44:26",
+      "author_hash": "[REDACTED]",
+      "char_count": 253,
+      "word_count": 48,
+      "helpful_count": 26,
+      "rating_group": "negative",
+      "week_id": "2025-W45"
+    }
+  ]
+}
+

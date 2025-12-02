@@ -1,0 +1,33 @@
+{
+  "polling": {
+    "enabled": true,
+    "interval_seconds": 60,
+    "manual_mode": true,
+    "continuous_mode": false
+  },
+  "imap": {
+    "server": "imap.gmail.com",
+    "port": 993,
+    "use_ssl": true,
+    "email": "harikrish656@gmail.com",
+    "password_env": "EMAIL_PASSWORD",
+    "folder": "INBOX",
+    "subject_filter": "[ANALYZE]",
+    "processed_folder": "PROCESSED"
+  },
+  "authorized_senders": {
+    "emails": [
+      "harikrish656@gmail.com"
+    ],
+    "domains": [],
+    "mode": "whitelist"
+  },
+  "rate_limiting": {
+    "enabled": true,
+    "max_requests_per_hour": 10,
+    "max_requests_per_day": 50
+  },
+  "default_time_period": {
+    "weeks_back": 12
+  }
+}

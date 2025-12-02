@@ -141,6 +141,7 @@ class Phase4Pipeline:
                     f'cid:sentiment_graph'
                 )
             
+            
             # Step 5: Render email template (just embed the report, no extra body)
             email_html = self.email_template.render(
                 subject=email_subject,
@@ -160,6 +161,7 @@ class Phase4Pipeline:
                 inline_images = {
                     "sentiment_graph": str(sentiment_graph_path)
                 }
+                
                 
                 # Retry logic for email sending
                 last_error = None

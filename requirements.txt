@@ -53,6 +53,13 @@ boto3>=1.28.0  # For AWS SES
 apscheduler>=3.10.0
 
 # ============================================
+# Phase 5: Email Interface (Inbound Email Processing via IMAP)
+# ============================================
+# IMAP Client
+imapclient>=1.4.0
+email-validator>=2.0.0
+
+# ============================================
 # CLI & Utilities
 # ============================================
 typer>=0.9.0

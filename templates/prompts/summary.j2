@@ -34,13 +34,16 @@ TASK:
 Generate a structured JSON response for the "Weekly Pulse" report with the following sections:
 
 1. **title**: A creative, catchy headline that is UNIQUE to this period's specific data. Base it on the actual cluster summaries and key issues provided. Do NOT use generic titles. Do NOT mention week numbers (e.g., "Week 47", "Week 48", "W47"). Instead, reference the time period naturally using month names (e.g., "App Crashes Dominate November as Fee Complaints Surge").
-2. **executive_summary**: A concise paragraph (max 150 words) summarizing the overall trends, major wins, and critical issues. 
-   - MUST include specific numbers and statistics{% if is_insight_based %} (e.g., "24 insights about app crashes", "17% of insights mentioned fees", "3 clusters focused on performance issues", "41 insights out of 109 total insights"){% else %} (e.g., "24 users reported app crashes", "17% of reviews mentioned fees", "3 clusters focused on performance issues", "41 reviews out of 109"){% endif %}.
-   - Use quantitative language like a data scientist would: percentages, counts, distributions, ratios.
-   - Reference cluster sizes, {% if is_insight_based %}insight counts, theme-sentiment distributions{% else %}review counts, theme distributions{% endif %}, and user impact numbers to support your analysis.
-   {% if is_insight_based %}- Note: A single review can contain multiple insights across different themes and sentiments. Count insights, not reviews, when analyzing theme distribution.{% endif %}
-   - Write with the authority and precision of a 20-year experienced analyst.
-   - Do NOT use phrases like "this week" or "this period" - just state the facts directly.
+2. **executive_summary**: Write a concise, executive-level summary (max 150 words) that focuses on business outcomes and actionable insights. 
+   - DO NOT use technical terms like "insights", "clusters", "theme-sentiment distributions", or any data science jargon.
+   - Focus on what MATTERS to executives: user experiences, business impact, and actionable outcomes.
+   - Use natural language: "24 users reported app crashes" instead of "24 insights about crashes" or "Cluster 2 identified..."
+   - Emphasize business implications: user satisfaction, revenue impact, operational issues, customer retention concerns.
+   - Include specific numbers when they matter: "17% of user feedback mentioned fees", "app crashes affected 24 users", "positive feedback highlighted the user-friendly interface".
+   - Write for a C-level executive who needs to understand the business impact, not the data processing methodology.
+   - Be outcome-oriented: What should leadership know? What actions are needed? What are the risks and opportunities?
+   - Do NOT mention week numbers or say "this week/period" - use specific month names.
+   - Structure: Start with overall trend → Key wins → Critical issues that need attention.
 3. **positive_insights**: Select top 3 themes that are WORKING well{% if is_insight_based %} (focus on clusters with positive sentiment){% endif %}. For each:
    - `theme_name`: Name of the positive aspect (e.g., "Ease of Use", "Quick KYC")
    - `representative_quote`: A real user quote from the input that best captures this positivity (keep it short).{% if is_insight_based %} These quotes come from insight source_text, which are specific phrases from reviews.{% endif %}

@@ -52,9 +52,12 @@ coverage.xml
 
 # Environments
 .env
+.env.local
+.env.*.local
 .venv
 env/
 venv/
+venv312/
 ENV/
 env.bak/
 venv.bak/
@@ -83,6 +86,15 @@ data/reports/json/*.json
 data/reports/graphs/*.png
 data/reports/html/*.html
 
+# Temporary documentation files
+docs/DEBUGGING_*.md
+EMAIL_DELIVERABILITY_GUIDE.md
+QUICK_START.md
+THEME_MAPPING_IMPROVEMENTS.md
+examples/images/PLACE_SCREENSHOTS_HERE.md
+tests/test_*.md
+tasks/tasks-weekly-review-analyser.md
+
 # Keep data directories
 !data/raw/.gitkeep
 !data/classified/.gitkeep
@@ -102,3 +114,38 @@ Thumbs.db
 *.pem
 *.key
 secrets/
+
+# Temporary test and debug scripts
+scripts/test_*.py
+scripts/check_*.py
+scripts/debug_*.py
+scripts/validate_*.py
+scripts/verify_*.py
+scripts/regenerate_*.py
+scripts/*_summary.md
+scripts/*_guide.md
+scripts/*_results.md
+scripts/*_plan.md
+scripts/*_instructions.md
+scripts/QUICK_*.md
+scripts/MANUAL_*.md
+scripts/setup_*.md
+scripts/fix_*.md
+scripts/pre_*.md
+scripts/task*.md
+scripts/refinements_*.md
+scripts/insight_*.md
+scripts/save_*.md
+scripts/summary_*.md
+scripts/full_pipeline_*.md
+scripts/test_*.md
+test_*.py
+check_*.py
+classify_*.py
+cluster_*.py
+generate_*.py
+send_*.py
+show_*.py
+verify_*.py
+activate_*.bat
+setup_*.ps1

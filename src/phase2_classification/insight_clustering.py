@@ -1,7 +1,7 @@
 """Insight clustering pipeline for multi-theme insights."""
 
 import logging
-from collections import defaultdict
+from collections import Counter, defaultdict
 from typing import Dict, List, Optional, Tuple
 import numpy as np
 
@@ -23,13 +23,14 @@ class InsightClusteringPipeline:
     Clustering pipeline for insights (not reviews).
     
     Pipeline stages:
-    1. Group insights by (theme_id, sentiment)
-    2. For each group, generate embeddings from source_text
+    1. Extract ALL insights from all reviews (no grouping)
+    2. Generate embeddings from source_text for all insights
     3. Reduce dimensions with UMAP
     4. Cluster with HDBSCAN
-    5. Select representative insights (top confidence)
-    6. Generate cluster labels with LLM
-    7. Create InsightCluster objects
+    5. For each cluster, determine theme and sentiment (majority vote)
+    6. Select representative insights (top confidence)
+    7. Generate cluster labels with LLM
+    8. Create InsightCluster objects
     """
     
     def __init__(
@@ -102,6 +103,8 @@ class InsightClusteringPipeline:
         """
         Cluster insights from multi-theme reviews.
         
+        Clusters ALL insights together, then determines theme/sentiment for each cluster.
+        
         Args:
             multi_theme_reviews: List of MultiThemeReview objects with extracted insights
         
@@ -112,123 +115,117 @@ class InsightClusteringPipeline:
         logger.info("Starting Insight Clustering Pipeline")
         logger.info("=" * 70)
         
-        # Step 1: Extract all insights and group by (theme_id, sentiment)
-        logger.info("\n[Step 1/6] Grouping insights by theme and sentiment...")
-        insight_groups = self._group_insights_by_theme_sentiment(multi_theme_reviews)
-        logger.info(f"Found {len(insight_groups)} theme-sentiment groups")
+        # Step 1: Extract ALL insights from all reviews (no grouping)
+        logger.info("\n[Step 1/6] Extracting all insights...")
+        all_insights = []
+        for review in multi_theme_reviews:
+            all_insights.extend(review.insights)
         
-        all_clusters = []
-        global_cluster_id = 0
+        total_insights = len(all_insights)
+        logger.info(f"Extracted {total_insights} total insights from {len(multi_theme_reviews)} reviews")
         
-        # Step 2-6: Process each theme-sentiment group
-        for (theme_id, theme_name, sentiment), insights in insight_groups.items():
-            logger.info(
-                f"\nProcessing group: {theme_name} ({theme_id}) - {sentiment} "
-                f"({len(insights)} insights)"
+        if total_insights == 0:
+            logger.warning("No insights to cluster!")
+            return []
+        
+        if total_insights < self.hdbscan_min_cluster_size:
+            logger.warning(
+                f"Only {total_insights} insights available, which is less than "
+                f"min_cluster_size={self.hdbscan_min_cluster_size}. Creating single cluster."
             )
-            
-            if len(insights) < 2:
-                # Too few insights to cluster, create single cluster
-                cluster = self._create_single_insight_cluster(
-                    insights[0] if insights else None,
-                    theme_id,
-                    theme_name,
-                    sentiment,
-                    global_cluster_id
-                )
-                if cluster:
-                    all_clusters.append(cluster)
-                    global_cluster_id += 1
-                continue
-            
-            # Step 2: Generate embeddings from source_text
-            logger.info(f"  [Step 2/6] Generating embeddings for {len(insights)} insights...")
-            embedding_gen = self._get_embedding_generator()
-            source_texts = [insight.source_text for insight in insights]
-            embeddings = embedding_gen.embed_texts(source_texts, show_progress=False)
-            
-            # Step 3: Reduce dimensions
-            logger.info(f"  [Step 3/6] Reducing dimensions...")
-            reducer = self._get_umap_reducer()
-            reduced_embeddings = reducer.fit_transform(embeddings)
-            
-            # Step 4: Cluster insights
-            logger.info(f"  [Step 4/6] Clustering insights...")
-            clusterer = self._get_hdbscan_clusterer()
-            cluster_result = clusterer.fit_predict(reduced_embeddings)
-            logger.info(
-                f"    Found {cluster_result.n_clusters} clusters, "
-                f"{cluster_result.n_noise} noise points"
-            )
-            
-            # Step 5: Create clusters for each cluster_id
-            clusters = self._create_insight_clusters(
-                insights=insights,
-                embeddings=embeddings,
-                cluster_result=cluster_result,
-                theme_id=theme_id,
-                theme_name=theme_name,
-                sentiment=sentiment,
-                start_cluster_id=global_cluster_id
-            )
-            
-            all_clusters.extend(clusters)
-            global_cluster_id += len(clusters)
+            # Create one cluster for all insights
+            return self._create_single_cluster_from_all_insights(all_insights)
+        
+        # Step 2: Generate embeddings from source_text for ALL insights
+        logger.info(f"\n[Step 2/6] Generating embeddings for {total_insights} insights...")
+        embedding_gen = self._get_embedding_generator()
+        source_texts = [insight.source_text for insight in all_insights]
+        embeddings = embedding_gen.embed_texts(source_texts, show_progress=True)
+        logger.info(f"Generated embeddings: shape {embeddings.shape}")
+        
+        # Step 3: Reduce dimensions
+        logger.info(f"\n[Step 3/6] Reducing dimensions with UMAP...")
+        reducer = self._get_umap_reducer()
+        reduced_embeddings = reducer.fit_transform(embeddings)
+        logger.info(f"Reduced embeddings: shape {reduced_embeddings.shape}")
+        
+        # Step 4: Cluster ALL insights together
+        logger.info(f"\n[Step 4/6] Clustering insights with HDBSCAN...")
+        clusterer = self._get_hdbscan_clusterer()
+        cluster_result = clusterer.fit_predict(reduced_embeddings)
+        logger.info(
+            f"Clustering complete: {cluster_result.n_clusters} clusters, "
+            f"{cluster_result.n_noise} noise points"
+        )
+        
+        # Step 5-6: Create clusters and determine theme/sentiment for each
+        logger.info(f"\n[Step 5/6] Creating clusters and determining themes...")
+        clusters = self._create_insight_clusters_from_labels(
+            insights=all_insights,
+            embeddings=embeddings,
+            reduced_embeddings=reduced_embeddings,
+            cluster_result=cluster_result
+        )
         
         logger.info("\n" + "=" * 70)
-        logger.info(f"Insight Clustering Complete! Created {len(all_clusters)} clusters")
+        logger.info(f"Insight Clustering Complete! Created {len(clusters)} clusters")
         logger.info("=" * 70)
         
-        return all_clusters
+        return clusters
     
-    def _group_insights_by_theme_sentiment(
+    def _create_single_cluster_from_all_insights(
         self,
-        multi_theme_reviews: List[MultiThemeReview]
-    ) -> Dict[Tuple[str, str, str], List[ThemeSentimentInsight]]:
-        """Group insights by (theme_id, theme_name, sentiment)."""
-        groups = defaultdict(list)
+        insights: List[ThemeSentimentInsight]
+    ) -> List[InsightCluster]:
+        """Create a single cluster when there are too few insights to cluster properly."""
+        if not insights:
+            return []
         
-        for review in multi_theme_reviews:
-            for insight in review.insights:
-                key = (insight.theme_id, insight.theme_name, insight.sentiment)
-                groups[key].append(insight)
+        # Determine theme and sentiment by majority vote
+        theme_counter = Counter((insight.theme_id, insight.theme_name) for insight in insights)
+        sentiment_counter = Counter(insight.sentiment for insight in insights)
         
-        return dict(groups)
+        (theme_id, theme_name), _ = theme_counter.most_common(1)[0]
+        sentiment, _ = sentiment_counter.most_common(1)[0]
+        
+        # Select representative insights (top confidence)
+        sorted_insights = sorted(insights, key=lambda x: x.confidence, reverse=True)
+        representative_insights = sorted_insights[:self.max_representative_insights]
+        
+        # Create simple cluster
+        cluster = InsightCluster(
+            cluster_id=0,
+            theme_id=theme_id,
+            theme_name=theme_name,
+            sentiment=sentiment,
+            size=len(insights),
+            label=f"{theme_name} - {sentiment.title()}",
+            summary=f"Cluster containing {len(insights)} insights about {theme_name.lower()}",
+            key_issues=[insight.source_text[:100] for insight in representative_insights[:3]],
+            representative_insights=representative_insights,
+            avg_confidence=float(np.mean([insight.confidence for insight in insights])),
+            review_ids=list(set(insight.review_id for insight in insights))
+        )
+        
+        return [cluster]
     
-    def _create_insight_clusters(
+    def _create_insight_clusters_from_labels(
         self,
         insights: List[ThemeSentimentInsight],
         embeddings: np.ndarray,
-        cluster_result,
-        theme_id: str,
-        theme_name: str,
-        sentiment: str,
-        start_cluster_id: int
+        reduced_embeddings: np.ndarray,
+        cluster_result
     ) -> List[InsightCluster]:
-        """Create InsightCluster objects from clustering results."""
+        """Create InsightCluster objects from clustering results, determining theme/sentiment per cluster."""
         clusters = []
         labeler = self._get_cluster_labeler()
         
+        # Get unique cluster IDs (excluding noise -1)
+        unique_cluster_ids = sorted([cid for cid in set(cluster_result.labels) if cid != -1])
+        logger.info(f"Processing {len(unique_cluster_ids)} clusters...")
+        
         # Process each cluster
-        # Map local cluster indices to global cluster IDs
-        local_to_global = {}
-        next_global_id = start_cluster_id
-        
-        for cluster_idx in sorted(cluster_result.cluster_sizes.keys()):
-            if cluster_idx == -1:
-                # Skip noise for now, handle separately
-                continue
-            
-            local_to_global[cluster_idx] = next_global_id
-            next_global_id += 1
-        
-        for cluster_idx in sorted(cluster_result.cluster_sizes.keys()):
-            if cluster_idx == -1:
-                # Handle noise points separately
-                continue
-            
-            global_cluster_id = local_to_global[cluster_idx]
-            
+        for cluster_idx in unique_cluster_ids:
             # Get insights in this cluster
             cluster_insight_indices = np.where(cluster_result.labels == cluster_idx)[0]
             cluster_insights = [insights[i] for i in cluster_insight_indices]
@@ -236,8 +233,21 @@ class InsightClusteringPipeline:
             if not cluster_insights:
                 continue
             
+            # Determine theme and sentiment by majority vote within cluster
+            theme_counter = Counter((insight.theme_id, insight.theme_name) for insight in cluster_insights)
+            sentiment_counter = Counter(insight.sentiment for insight in cluster_insights)
+            
+            (theme_id, theme_name), theme_count = theme_counter.most_common(1)[0]
+            sentiment, sentiment_count = sentiment_counter.most_common(1)[0]
+            
+            logger.info(
+                f"  Cluster {cluster_idx}: {len(cluster_insights)} insights -> "
+                f"{theme_name} ({theme_id}) - {sentiment} "
+                f"(majority: {theme_count}/{len(cluster_insights)} theme, "
+                f"{sentiment_count}/{len(cluster_insights)} sentiment)"
+            )
+            
             # Select representative insights (top confidence)
-            # Sort by confidence and take top N, keeping track of original indices
             sorted_with_indices = sorted(
                 zip(cluster_insight_indices, cluster_insights),
                 key=lambda x: x[1].confidence,
@@ -251,27 +261,26 @@ class InsightClusteringPipeline:
             avg_confidence = np.mean([insight.confidence for insight in cluster_insights])
             review_ids = list(set(insight.review_id for insight in cluster_insights))
             
-            # Generate label using ClusterLabeler (adapt for insights)
-            # Convert insights to Representative-like objects for labeling
-            # Use embeddings of all cluster insights for centroid calculation
+            # Prepare embeddings for labeling
             cluster_embeddings = embeddings[cluster_insight_indices]
             representative_embeddings = embeddings[representative_local_indices]
             
             representatives = self._insights_to_representatives(
                 representative_insights,
                 representative_local_indices,
-                cluster_embeddings,  # Pass all cluster embeddings for centroid
-                representative_embeddings  # Pass representative embeddings for distance calc
+                cluster_embeddings,
+                representative_embeddings
             )
             
+            # Generate label using ClusterLabeler
             cluster_label = labeler.label_cluster(
-                cluster_id=global_cluster_id,
+                cluster_id=cluster_idx,
                 representatives=representatives
             )
             
             # Create InsightCluster
             cluster = InsightCluster(
-                cluster_id=global_cluster_id,
+                cluster_id=cluster_idx,
                 theme_id=theme_id,
                 theme_name=theme_name,
                 sentiment=sentiment,
@@ -288,37 +297,35 @@ class InsightClusteringPipeline:
         
         # Handle noise points - create individual clusters for high-confidence insights
         noise_indices = np.where(cluster_result.labels == -1)[0]
-        noise_cluster_id = next_global_id
+        logger.info(f"Processing {len(noise_indices)} noise points...")
+        
+        next_cluster_id = max(unique_cluster_ids) + 1 if unique_cluster_ids else 0
         for noise_idx in noise_indices:
             insight = insights[noise_idx]
             # Only create cluster for high-confidence noise insights
             if insight.confidence >= 0.7:
                 cluster = self._create_single_insight_cluster(
                     insight,
-                    theme_id,
-                    theme_name,
-                    sentiment,
-                    noise_cluster_id
+                    insight.theme_id,
+                    insight.theme_name,
+                    insight.sentiment,
+                    next_cluster_id
                 )
                 if cluster:
                     clusters.append(cluster)
-                    noise_cluster_id += 1
+                    next_cluster_id += 1
         
         return clusters
     
     def _create_single_insight_cluster(
         self,
-        insight: Optional[ThemeSentimentInsight],
+        insight: ThemeSentimentInsight,
         theme_id: str,
         theme_name: str,
         sentiment: str,
         cluster_id: int
-    ) -> Optional[InsightCluster]:
-        """Create a single-insight cluster (for small groups or noise)."""
-        if not insight:
-            return None
-        
-        # Simple label and summary from single insight
+    ) -> InsightCluster:
+        """Create a single-insight cluster (for noise points)."""
         label = f"{theme_name} - {sentiment.title()}"
         summary = f"User feedback about {theme_name.lower()}: {insight.source_text[:200]}"
         key_issues = [insight.source_text[:100]] if len(insight.source_text) > 50 else []
@@ -384,4 +391,3 @@ class InsightClusteringPipeline:
             representatives.append(rep)
         
         return representatives
-

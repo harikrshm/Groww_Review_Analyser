@@ -245,3 +245,49 @@ def calculate_percentage(part: int, total: int) -> float:
         return 0.0
     return round((part / total) * 100, 1)
 
+
+def get_available_weeks_from_reviews(reviews_dir: str = "data/raw") -> list[str]:
+    """
+    Get list of available week IDs from review files.
+    
+    Args:
+        reviews_dir: Directory containing review JSON files
+        
+    Returns:
+        List of week IDs (e.g., ["2025-W45", "2025-W46"])
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    reviews_path = Path(reviews_dir)
+    if not reviews_path.exists():
+        return []
+    
+    weeks = set()
+    
+    # Get all review files
+    for review_file in reviews_path.glob("reviews_*.json"):
+        try:
+            data = load_json_file(review_file)
+            reviews = data.get("reviews", [])
+            
+            # Extract weeks from review timestamps
+            for review in reviews:
+                timestamp_str = review.get("timestamp")
+                if isinstance(timestamp_str, str):
+                    try:
+                        timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                    except:
+                        continue
+                elif isinstance(timestamp_str, datetime):
+                    timestamp = timestamp_str
+                else:
+                    continue
+                
+                iso = timestamp.isocalendar()
+                week_id = f"{iso[0]}-W{iso[1]:02d}"
+                weeks.add(week_id)
+        except Exception as e:
+            logger.warning(f"Failed to process review file {review_file}: {e}")
+    
+    return sorted(list(weeks))

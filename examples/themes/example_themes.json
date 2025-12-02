@@ -1,0 +1,58 @@
+{
+  "version": "1.0.0",
+  "themes": [
+    {
+      "id": "ui_ux",
+      "name": "User Interface & Experience",
+      "description": "User interface design, navigation, and overall user experience including ease of use, layout, and visual design.",
+      "keywords": [
+        "ui", "ux", "interface", "design", "layout", "navigation",
+        "easy", "simple", "intuitive", "user-friendly", "clean",
+        "confusing", "cluttered", "difficult", "poor design"
+      ],
+      "example_quotes": [
+        "The interface is clean and easy to navigate",
+        "UI is confusing and hard to use"
+      ],
+      "sentiment_indicators": {
+        "negative": ["confusing", "cluttered", "difficult", "poor design"],
+        "positive": ["easy", "simple", "intuitive", "clean", "user-friendly"]
+      }
+    },
+    {
+      "id": "performance",
+      "name": "App Performance",
+      "description": "App speed, responsiveness, crashes, glitches, and overall performance issues.",
+      "keywords": [
+        "slow", "fast", "crash", "glitch", "bug", "lag", "freeze",
+        "performance", "speed", "responsive", "reliable", "stability"
+      ],
+      "example_quotes": [
+        "App is very slow and crashes frequently",
+        "Fast and reliable performance"
+      ],
+      "sentiment_indicators": {
+        "negative": ["slow", "crash", "glitch", "bug", "freeze"],
+        "positive": ["fast", "smooth", "reliable", "stable"]
+      }
+    },
+    {
+      "id": "pricing",
+      "name": "Pricing & Fees",
+      "description": "Brokerage fees, charges, pricing transparency, and cost-related feedback.",
+      "keywords": [
+        "fee", "fees", "brokerage", "charge", "pricing", "cost",
+        "expensive", "cheap", "free", "hidden", "transparency"
+      ],
+      "example_quotes": [
+        "High brokerage fees are eating into profits",
+        "Great value for money with low fees"
+      ],
+      "sentiment_indicators": {
+        "negative": ["expensive", "high fees", "hidden charges"],
+        "positive": ["cheap", "low fees", "good value", "free"]
+      }
+    }
+  ]
+}
+

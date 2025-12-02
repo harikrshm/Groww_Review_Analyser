@@ -398,7 +398,15 @@ class TestPhase4Pipeline:
                                         sample_email_config: Dict[str, Any],
                                         sample_weekly_summary: WeeklyPulseSummary, tmp_path: Path):
         """Test dry run mode for sending weekly report."""
-        mock_load_json.return_value = sample_email_config
+        # Setup mock to return different values based on file path
+        def load_json_side_effect(file_path):
+            if "email.json" in str(file_path) or "config" in str(file_path):
+                return sample_email_config
+            elif "summary" in str(file_path):
+                return sample_weekly_summary.model_dump(mode='json')
+            return {}
+        
+        mock_load_json.side_effect = load_json_side_effect
         
         # Setup mocks
         mock_phase3 = Mock()
@@ -450,7 +458,15 @@ class TestPhase4Pipeline:
                                             sample_email_config: Dict[str, Any],
                                             sample_weekly_summary: WeeklyPulseSummary, tmp_path: Path):
         """Test retry logic for failed email sends."""
-        mock_load_json.return_value = sample_email_config
+        # Setup mock to return different values based on file path
+        def load_json_side_effect(file_path):
+            if "email.json" in str(file_path) or "config" in str(file_path):
+                return sample_email_config
+            elif "summary" in str(file_path):
+                return sample_weekly_summary.model_dump(mode='json')
+            return {}
+        
+        mock_load_json.side_effect = load_json_side_effect
         
         # Setup mocks
         mock_phase3 = Mock()
@@ -531,3 +547,217 @@ class TestEmailIntegration:
         assert hasattr(provider, 'send_email')
         assert callable(provider.send_email)
 
+
+# ============================================
+# PII Validation Tests
+# ============================================
+
+class TestPIIValidation:
+    """Tests for PII detection and validation in emails."""
+    
+    def test_summary_contains_no_email_addresses(self, sample_weekly_summary: WeeklyPulseSummary):
+        """Test that summary doesn't contain email addresses."""
+        import re
+        
+        # Check all text fields for email patterns
+        text_fields = [
+            sample_weekly_summary.title,
+            sample_weekly_summary.executive_summary,
+        ]
+        
+        for insight in sample_weekly_summary.positive_insights + sample_weekly_summary.negative_insights:
+            text_fields.append(insight.representative_quote)
+            text_fields.append(insight.inference)
+        
+        for action in sample_weekly_summary.action_plan:
+            text_fields.append(action.description)
+        
+        email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+        
+        for field in text_fields:
+            matches = re.findall(email_pattern, field)
+            assert len(matches) == 0, f"Found email addresses in field: {matches}"
+    
+    def test_summary_contains_no_phone_numbers(self, sample_weekly_summary: WeeklyPulseSummary):
+        """Test that summary doesn't contain phone numbers."""
+        import re
+        
+        text_fields = [
+            sample_weekly_summary.title,
+            sample_weekly_summary.executive_summary,
+        ]
+        
+        for insight in sample_weekly_summary.positive_insights + sample_weekly_summary.negative_insights:
+            text_fields.append(insight.representative_quote)
+        
+        # Common phone number patterns
+        phone_patterns = [
+            r'\b\d{3}[-.]?\d{3}[-.]?\d{4}\b',  # US format
+            r'\b\d{10}\b',  # 10 digits
+            r'\+\d{1,3}[-.\s]?\d{1,4}[-.\s]?\d{1,4}[-.\s]?\d{1,9}\b',  # International
+        ]
+        
+        for field in text_fields:
+            for pattern in phone_patterns:
+                matches = re.findall(pattern, field)
+                assert len(matches) == 0, f"Found phone numbers in field: {matches}"
+    
+    @patch('src.phase4_email.pipeline.Phase3Pipeline')
+    @patch('src.phase4_email.pipeline.EmailDrafter')
+    @patch('src.phase4_email.pipeline.load_json_file')
+    def test_pii_removed_from_email_body(self, mock_load_json, mock_drafter_class,
+                                          mock_phase3_class, sample_email_config: Dict[str, Any],
+                                          tmp_path: Path):
+        """Test that PII is removed from email body content."""
+        from src.phase3_summary.pii_remover import PIIRemover
+        
+        mock_load_json.return_value = sample_email_config
+        
+        # Create summary with potential PII
+        summary_with_pii = WeeklyPulseSummary(
+            week_id="2025-W47",
+            date_range="Nov 3rd week",
+            total_reviews=100,
+            title="Test Report",
+            executive_summary="Contact user@example.com for details or call 123-456-7890",
+            positive_insights=[],
+            negative_insights=[],
+            action_plan=[],
+            model_name="test-model"
+        )
+        
+        # Test PII remover directly
+        pii_remover = PIIRemover()
+        cleaned = pii_remover.anonymize(summary_with_pii.executive_summary)
+        
+        # Should have removed/replaced PII (Presidio uses <EMAIL> and <PHONE> format)
+        assert "user@example.com" not in cleaned or "<EMAIL>" in cleaned
+        assert "123-456-7890" not in cleaned or "<PHONE>" in cleaned
+
+
+# ============================================
+# Insight-Based Summary Support Tests
+# ============================================
+
+class TestInsightBasedSupport:
+    """Tests for Phase 4 support of insight-based summaries."""
+    
+    def test_email_drafter_with_insight_summary(self):
+        """Test email drafter works with insight-based summary (has total_insights)."""
+        summary_with_insights = WeeklyPulseSummary(
+            week_id="2025-W47",
+            date_range="Nov 3rd week",
+            total_reviews=25,
+            total_insights=33,  # Insight-based summary
+            title="Insight-Based Report",
+            executive_summary="This summary is based on insights",
+            positive_insights=[],
+            negative_insights=[],
+            action_plan=[],
+            model_name="test-model"
+        )
+        
+        drafter = EmailDrafter()
+        result = drafter.draft_email(summary_with_insights)
+        
+        assert "subject" in result
+        assert result["subject"] == "Insight-Based Report"
+        # Should work the same regardless of insight count
+    
+    @patch('src.phase4_email.pipeline.load_json_file')
+    @patch('src.phase4_email.pipeline.SendGridProvider')
+    @patch('src.phase4_email.pipeline.EmailDrafter')
+    @patch('src.phase4_email.pipeline.Phase3Pipeline')
+    def test_pipeline_with_insight_cluster_report(self, mock_phase3_class, mock_drafter_class,
+                                                    mock_provider_class, mock_load_json,
+                                                    sample_email_config: Dict[str, Any],
+                                                    tmp_path: Path):
+        """Test pipeline works with insight cluster reports."""
+        # Setup mock to return different values based on file path
+        def load_json_side_effect(file_path):
+            if "email.json" in str(file_path) or "config" in str(file_path):
+                return sample_email_config
+            elif "summary" in str(file_path):
+                # Create summary with insights for this test
+                summary_with_insights = WeeklyPulseSummary(
+                    week_id="2025-W47",
+                    date_range="Nov 3rd week",
+                    total_reviews=25,
+                    total_insights=33,
+                    title="Test Report",
+                    executive_summary="Test",
+                    positive_insights=[],
+                    negative_insights=[],
+                    action_plan=[],
+                    model_name="test-model"
+                )
+                return summary_with_insights.model_dump(mode='json')
+            return {}
+        
+        mock_load_json.side_effect = load_json_side_effect
+        
+        # Create insight cluster report file
+        insight_report = {
+            "week_id": "2025-W47",
+            "clustering_type": "insight",
+            "insight_clusters": [],
+            "metadata": {
+                "total_reviews": 25,
+                "total_insights": 33
+            }
+        }
+        
+        insight_report_file = tmp_path / "insights_2025-W47_report.json"
+        with open(insight_report_file, 'w') as f:
+            json.dump(insight_report, f)
+        
+        # Setup mocks
+        mock_phase3 = Mock()
+        mock_phase3.run.return_value = str(tmp_path / "report.html")
+        mock_phase3.json_dir = tmp_path / "json"
+        mock_phase3.json_dir.mkdir(parents=True)
+        mock_phase3.graph_generator = Mock()
+        mock_phase3.graph_generator.output_dir = str(tmp_path / "graphs")
+        (tmp_path / "graphs").mkdir(parents=True)
+        mock_phase3_class.return_value = mock_phase3
+        
+        mock_drafter = Mock()
+        mock_drafter.draft_email.return_value = {"subject": "Test Subject"}
+        mock_drafter_class.return_value = mock_drafter
+        
+        # Create summary file on disk (though mock will return it)
+        summary_file = tmp_path / "json" / "summary_2025-W47.json"
+        summary_file.parent.mkdir(parents=True, exist_ok=True)
+        summary_with_insights = WeeklyPulseSummary(
+            week_id="2025-W47",
+            date_range="Nov 3rd week",
+            total_reviews=25,
+            total_insights=33,
+            title="Test Report",
+            executive_summary="Test",
+            positive_insights=[],
+            negative_insights=[],
+            action_plan=[],
+            model_name="test-model"
+        )
+        summary_file.write_text(summary_with_insights.model_dump_json())
+        
+        graph_file = tmp_path / "graphs" / "sentiment_balance_2025-W47.png"
+        graph_file.write_bytes(b"fake_image")
+        
+        html_file = tmp_path / "report.html"
+        html_file.write_text("<html><body>Report</body></html>")
+        
+        pipeline = Phase4Pipeline()
+        pipeline.phase3_pipeline = mock_phase3
+        pipeline.email_drafter = mock_drafter
+        
+        # Should work with insight cluster report
+        success, error = pipeline.send_weekly_report(
+            week_id="2025-W47",
+            clusters_report_path=str(insight_report_file),
+            raw_reviews_path=str(tmp_path / "reviews.json"),
+            dry_run=True
+        )
+        
+        assert success is True

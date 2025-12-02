@@ -16,6 +16,7 @@ from src.phase4_email.pipeline import Phase4Pipeline
 from src.phase2_classification.week_clusterer import WeekClusterer
 from src.shared.utils import load_json_file
 from src.shared.theme_loader import load_themes, ThemeValidationError
+from src.phase5_email_interface.pipeline import EmailProcessingPipeline
 
 # Setup logging
 logging.basicConfig(
@@ -64,7 +65,16 @@ def generate(
     end_date: str = typer.Argument(..., help="End date (YYYY-MM-DD)"),
     reviews_file: str = typer.Option("data/raw/reviews_2025-11-27.json", "--reviews", "-r", help="Path to raw reviews JSON file"),
     output_dir: str = typer.Option("data/classified", "--output", "-o", help="Output directory for classified data"),
-    themes: Optional[str] = typer.Option(None, "--themes", "-t", help="Themes: file path to JSON file or inline JSON string"),
+    themes: Optional[str] = typer.Option(
+        None, 
+        "--themes", 
+        "-t", 
+        help="Themes for analysis. Can be:\n"
+             "  • File path: 'examples/themes/custom.json' (JSON file with 'themes' array)\n"
+             "  • Inline JSON: '[{\"id\":\"ui\",\"name\":\"UI/UX\",\"keywords\":[\"ui\",\"interface\"]}]'\n"
+             "  • Omit to use default themes from config/themes.json\n"
+             "Required fields: id, name, keywords. Optional: description (auto-generated if missing)."
+    ),
 ):
     """Generate report for a custom date range."""
     console.print(f"[bold blue]Generating report for {start_date} to {end_date}[/bold blue]")
@@ -322,6 +332,37 @@ def list_weeks(
         table.add_row(week_id, str(count))
     
     console.print(table)
+
+
+@app.command()
+def check_email(
+    config: str = typer.Option("config/inbound_email.json", "--config", "-c", help="Path to inbound email config file"),
+):
+    """Check inbox for new analysis requests and process them immediately (manual polling)."""
+    console.print("[bold blue]Checking email inbox for analysis requests...[/bold blue]")
+    
+    try:
+        # Initialize email processing pipeline
+        pipeline = EmailProcessingPipeline(config_path=config)
+        
+        # Poll and process emails
+        console.print("[yellow]Connecting to IMAP server...[/yellow]")
+        processed_count = pipeline.poll_and_process(
+            callback=lambda uid, success: console.print(
+                f"  {'[green]✓[/green]' if success else '[red]✗[/red]'} Email UID {uid}: {'Processed' if success else 'Failed'}"
+            )
+        )
+        
+        if processed_count > 0:
+            console.print(f"\n[bold green]✓ Processed {processed_count} email(s) successfully![/bold green]")
+        else:
+            console.print("\n[yellow]No new emails to process.[/yellow]")
+        
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        import traceback
+        console.print(f"[red]{traceback.format_exc()}[/red]")
+        raise typer.Exit(1)
 
 
 if __name__ == "__main__":

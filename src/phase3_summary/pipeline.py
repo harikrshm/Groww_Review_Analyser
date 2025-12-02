@@ -127,24 +127,34 @@ class Phase3Pipeline:
             df_reviews = self._prepare_dataframe(raw_reviews_data.get("reviews", []))
             total_reviews = len(df_reviews[df_reviews["week_id"] == week_id])
         elif is_insight_based:
-            # For insight-based, try to get review count from metadata if available
-            # Or from multi_theme_reviews if present in clusters_report
-            metadata = clusters_report.get("metadata", {})
-            total_reviews = metadata.get("total_reviews", 0)
+            # For insight-based, try to get review count from cluster report first
+            total_reviews = clusters_report.get("total_reviews", 0)
             if total_reviews == 0:
-                # Try to count unique review_ids from insight clusters
+                # Fallback: Try to get from metadata if available
+                metadata = clusters_report.get("metadata", {})
+                total_reviews = metadata.get("total_reviews", 0)
+            if total_reviews == 0:
+                # Last resort: count unique review_ids from insight clusters
                 review_ids = set()
                 for cluster in clusters_report.get("insight_clusters", []):
                     review_ids.update(cluster.get("review_ids", []))
                 total_reviews = len(review_ids)
+                logger.warning(f"total_reviews not in cluster report, counted from clusters: {total_reviews}")
         
         # Get total_insights if insight-based clustering
         total_insights = None
         if is_insight_based:
-            total_insights = sum(
-                cluster.get("size", 0) 
-                for cluster in clusters_report.get("insight_clusters", [])
-            )
+            # First try to get from cluster report metadata
+            total_insights = clusters_report.get("total_insights")
+            if total_insights is None or total_insights == 0:
+                # Fallback: calculate from cluster sizes
+                total_insights = sum(
+                    cluster.get("size", 0) 
+                    for cluster in clusters_report.get("insight_clusters", [])
+                )
+                logger.warning(
+                    f"total_insights not in cluster report, calculated from cluster sizes: {total_insights}"
+                )
             logger.info(f"Found {total_insights} insights from {total_reviews} reviews")
         
         # 2. Generate Summary (LLM)
@@ -171,17 +181,24 @@ class Phase3Pipeline:
             is_insight_based=is_insight_based
         )
         
-        # 4. Render HTML Report
+        # 4. Extract themes for display
+        themes_list = self._extract_themes_from_clusters(clusters_report)
+        
+        # 5. Render HTML Report
         # For local preview, use relative paths. 
         # In email sending (Phase 4), we'll use CIDs.
+        
         html_content = self.report_template.render(
             summary=summary,
+            themes=themes_list,  # Pass themes for display
             # Using placeholder CID for template - will replace for local preview
             sentiment_graph="cid:sentiment_graph"
         )
         
         # Replace CIDs with relative paths for local HTML viewing
         html_preview = html_content.replace('cid:sentiment_graph', f"../graphs/{sentiment_img_path.name}")
+        
+        # For email: Replace banner path with CID when sending (handled in Phase 4/5)
         
         output_path = self.html_dir / f"report_{week_id}.html"
         with open(output_path, "w", encoding="utf-8") as f:
@@ -243,3 +260,32 @@ class Phase3Pipeline:
                 })
             
         return pd.DataFrame(data)
+    
+    def _extract_themes_from_clusters(self, clusters_report: Dict) -> list:
+        """
+        Extract unique themes from clusters report.
+        
+        Returns:
+            List of dicts with 'theme_id' and 'theme_name'
+        """
+        themes_dict = {}  # Use dict to ensure uniqueness by theme_id
+        clustering_type = clusters_report.get("clustering_type", "review")
+        
+        if clustering_type == "insight":
+            clusters = clusters_report.get("insight_clusters", [])
+        else:
+            clusters = clusters_report.get("clusters", [])
+        
+        for cluster in clusters:
+            theme_id = cluster.get("theme_id")
+            theme_name = cluster.get("theme_name")
+            
+            if theme_id and theme_id != "UNMAPPED" and theme_id not in themes_dict:
+                themes_dict[theme_id] = {
+                    "theme_id": theme_id,
+                    "theme_name": theme_name or theme_id
+                }
+        
+        # Return as sorted list by theme_name
+        themes_list = sorted(themes_dict.values(), key=lambda x: x["theme_name"])
+        return themes_list

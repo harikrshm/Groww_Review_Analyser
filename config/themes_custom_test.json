@@ -1,0 +1,79 @@
+{
+  "version": "1.0.0",
+  "themes": [
+    {
+      "id": "live_trading",
+      "name": "Live Trading",
+      "description": "Real-time trading functionality, live order execution, market data updates, order placement and execution during live market hours. Issues with order placement, execution delays, real-time price updates, and trading during market hours.",
+      "keywords": [
+        "live trading", "live order", "real-time", "market hours", "trading hours",
+        "order placement", "order execution", "intraday", "day trading",
+        "live market", "real-time execution", "trading session", "market open",
+        "live price", "live chart", "live data"
+      ],
+      "sentiment_indicators": {
+        "negative": ["delayed", "slow", "not executing", "failed", "timeout", "hang", "missed opportunity"],
+        "positive": ["fast", "smooth", "instant", "quick execution", "reliable", "works well"]
+      }
+    },
+    {
+      "id": "kyc_payments",
+      "name": "KYC & Payments",
+      "description": "Know Your Customer (KYC) verification process, account setup, payment methods, bank account linking, payment processing, KYC document upload and verification. Issues with KYC approval, payment failures, bank linking, payment gateway, and account verification.",
+      "keywords": [
+        "kyc", "verification", "account setup", "bank account", "payment",
+        "bank linking", "payment method", "payment gateway", "payment failure",
+        "account verification", "document upload", "kyc approval", "bank verification",
+        "upi", "net banking", "payment processing", "transaction"
+      ],
+      "sentiment_indicators": {
+        "negative": ["failed", "rejected", "delayed", "not working", "error", "issue", "problem"],
+        "positive": ["quick", "easy", "smooth", "fast approval", "simple", "hassle-free"]
+      }
+    },
+    {
+      "id": "stock",
+      "name": "Stock Trading",
+      "description": "Stock trading features, buying and selling stocks, stock market analysis, stock portfolio management, stock selection, stock charts, and stock trading experience. Issues with stock trading functionality, stock orders, stock prices, stock charts, and portfolio management.",
+      "keywords": [
+        "stock", "stocks", "equity", "share", "shares", "stock trading",
+        "buy stock", "sell stock", "stock order", "stock price", "stock chart",
+        "portfolio", "stock portfolio", "equity trading", "stock market",
+        "stock analysis", "stock selection"
+      ],
+      "sentiment_indicators": {
+        "negative": ["difficult", "confusing", "slow", "not working", "error", "issue"],
+        "positive": ["easy", "simple", "smooth", "good", "excellent", "helpful"]
+      }
+    },
+    {
+      "id": "mutual_funds",
+      "name": "Mutual Funds",
+      "description": "Mutual fund investment features, mutual fund selection, mutual fund portfolio, SIP (Systematic Investment Plan), mutual fund research and analysis. Issues with mutual fund investing, fund selection, SIP setup, fund performance tracking, and mutual fund portfolio management.",
+      "keywords": [
+        "mutual fund", "mutual funds", "mf", "sip", "systematic investment",
+        "fund selection", "fund portfolio", "fund investment", "mutual fund portfolio",
+        "fund research", "fund analysis", "fund performance", "fund tracking"
+      ],
+      "sentiment_indicators": {
+        "negative": ["difficult", "confusing", "limited options", "not working", "issue"],
+        "positive": ["good selection", "easy", "helpful", "convenient", "smooth"]
+      }
+    },
+    {
+      "id": "brokerage_fees",
+      "name": "Brokerage Fees",
+      "description": "Brokerage charges, fees, commission rates, transaction costs, hidden charges, fee structure, and pricing transparency. Issues with high brokerage fees, unexpected charges, hidden fees, fee calculation, and fee transparency.",
+      "keywords": [
+        "brokerage", "fee", "fees", "charges", "commission", "cost",
+        "hidden charges", "transaction cost", "brokerage fee", "trading fee",
+        "charges", "pricing", "cost", "expensive", "fee structure"
+      ],
+      "sentiment_indicators": {
+        "negative": ["high", "expensive", "hidden", "too much", "unexpected", "excessive"],
+        "positive": ["low", "free", "reasonable", "transparent", "fair", "zero brokerage"]
+      }
+    }
+  ]
+}
+

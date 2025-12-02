@@ -95,8 +95,9 @@ class ClusteringPipeline:
         if self._insight_extractor is None:
             self._insight_extractor = MultiThemeExtractor(
                 themes=self.themes,
-                batch_size=self.extraction_batch_size,
-                delay_between_batches=self.extraction_delay
+                embedding_model=self.embedding_model,
+                cache_path=self.cache_path,
+                batch_size=self.extraction_batch_size
             )
         return self._insight_extractor
     
@@ -300,7 +301,9 @@ class ClusteringPipeline:
             total_clusters=len(insight_clusters),
             clusters=[],  # Empty for insight-based clustering
             insight_clusters=sorted_insight_clusters,  # Sorted by size
-            clustering_type="insight"
+            clustering_type="insight",
+            total_reviews=total_reviews,
+            total_insights=total_insights
         )
         
         # Log summary statistics

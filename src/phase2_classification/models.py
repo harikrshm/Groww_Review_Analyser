@@ -1,11 +1,19 @@
-"""Pydantic models for Phase 2: Review Classification (Clustering-based)."""
+"""
+Pydantic models for Phase 2: Multi-Theme Insight Extraction and Clustering.
+
+This module provides models for insight-based clustering, where multiple theme-sentiment
+insights are extracted from each review and then clustered for better granularity.
+"""
 
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TYPE_CHECKING
 from pydantic import BaseModel, Field, computed_field
 
 from src.phase1_scraping.models import RawReview
 from src.shared.models import ReviewSource
+
+if TYPE_CHECKING:
+    pass  # Forward references handled via string annotations
 
 
 # =============================================================================
@@ -81,7 +89,7 @@ class WeeklyClustersOutput(BaseModel):
     
     metadata: ClusteringMetadata = Field(..., description="Clustering metadata")
     reviews: List[ClusteredReview] = Field(default_factory=list, description="All reviews with cluster/theme assignments")
-    multi_theme_reviews: List[MultiThemeReview] = Field(
+    multi_theme_reviews: List["MultiThemeReview"] = Field(
         default_factory=list,
         description="Reviews with multi-theme insights (for insight-based clustering)"
     )
@@ -106,11 +114,13 @@ class ClustersReport(BaseModel):
     generated_at: datetime = Field(default_factory=datetime.now, description="When report was generated")
     total_clusters: int = Field(default=0, description="Total clusters formed")
     clusters: List[ClusterInfo] = Field(default_factory=list, description="Detailed cluster information (review-based)")
-    insight_clusters: List[InsightCluster] = Field(
+    insight_clusters: List["InsightCluster"] = Field(
         default_factory=list,
         description="Insight clusters (for insight-based clustering)"
     )
     clustering_type: str = Field(default="review", description="Type of clustering: 'review' or 'insight'")
+    total_reviews: Optional[int] = Field(default=None, description="Total number of reviews processed")
+    total_insights: Optional[int] = Field(default=None, description="Total number of insights extracted (for insight-based clustering)")
 
 
 # =============================================================================

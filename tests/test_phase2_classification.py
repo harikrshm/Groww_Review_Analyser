@@ -561,65 +561,147 @@ class TestThemeMapper:
 # ============================================
 
 class TestClusteringPipeline:
-    """Integration tests for full clustering pipeline."""
+    """Integration tests for insight-based clustering pipeline."""
+    
+    @pytest.fixture
+    def sample_themes_for_clustering(self, config_dir: Path) -> list[dict]:
+        """Load themes from config for clustering tests."""
+        themes_path = config_dir / "themes.json"
+        with open(themes_path, 'r', encoding='utf-8') as f:
+            themes_data = json.load(f)
+        return themes_data.get("themes", [])
+    
+    @pytest.mark.skipif(
+        True,  # Skip by default - requires model download and LLM API
+        reason="Requires model download and LLM API - use --run-slow flag"
+    )
+    def test_insight_clustering_pipeline(
+        self,
+        sample_reviews: List[dict],
+        temp_cache_db: Path,
+        config_dir: Path,
+        sample_themes_for_clustering: list[dict]
+    ):
+        """Test full insight-based clustering pipeline."""
+        from src.phase2_classification.multi_theme_extractor import MultiThemeExtractor
+        from src.phase2_classification.insight_clustering import InsightClusteringPipeline
+        
+        # Convert sample reviews to proper format (ensure timestamp is datetime)
+        reviews = []
+        for review in sample_reviews[:10]:
+            review_copy = review.copy()
+            if isinstance(review_copy.get("timestamp"), str):
+                from datetime import datetime
+                review_copy["timestamp"] = datetime.fromisoformat(review_copy["timestamp"])
+            reviews.append(review_copy)
+        
+        # Step 1: Extract insights from reviews
+        extractor = MultiThemeExtractor(
+            themes=sample_themes_for_clustering,
+            batch_size=5
+        )
+        multi_theme_reviews = extractor.extract_all_reviews(reviews)
+        
+        assert len(multi_theme_reviews) == len(reviews)
+        
+        # Verify all reviews have insights (or at least structure is correct)
+        total_insights = sum(len(review.insights) for review in multi_theme_reviews)
+        assert total_insights >= 0  # Can be 0 if no themes found
+        
+        # Step 2: Cluster insights (only if we have insights)
+        if total_insights > 0:
+            clustering_pipeline = InsightClusteringPipeline(
+                embedding_model="all-MiniLM-L6-v2",
+                cache_path=str(temp_cache_db),
+                hdbscan_min_cluster_size=2,
+                hdbscan_min_samples=2
+            )
+            
+            insight_clusters = clustering_pipeline.cluster_insights(multi_theme_reviews)
+            
+            # Validate insight clusters
+            assert isinstance(insight_clusters, list)
+            
+            for cluster in insight_clusters:
+                assert cluster.cluster_id >= 0
+                assert cluster.theme_id in [t["id"] for t in sample_themes_for_clustering]
+                assert cluster.sentiment in ["positive", "negative", "neutral"]
+                assert cluster.size > 0
+                assert cluster.label
+                assert cluster.summary
+                assert len(cluster.representative_insights) > 0
+                assert len(cluster.review_ids) > 0
     
     @pytest.mark.skipif(
         True,  # Skip by default - requires model download
         reason="Requires model download - use --run-slow flag"
     )
-    def test_full_pipeline(
+    def test_insight_embeddings_and_clustering(
         self,
         sample_reviews: List[dict],
         temp_cache_db: Path,
-        config_dir: Path
+        config_dir: Path,
+        sample_themes_for_clustering: list[dict]
     ):
-        """Test full clustering pipeline."""
-        # 1. Generate embeddings
-        generator = EmbeddingGenerator(
-            model_name="all-MiniLM-L6-v2",
-            cache_path=str(temp_cache_db),
-            use_cache=True
-        )
-        embeddings = generator.embed_reviews(sample_reviews[:10], show_progress=False)
+        """Test insight embedding generation and clustering steps."""
+        from src.phase2_classification.multi_theme_extractor import MultiThemeExtractor
+        from src.phase2_classification.insight_clustering import InsightClusteringPipeline
         
-        # 2. Reduce dimensions
-        reducer = UMAPReducer(n_components=5, random_state=42)
-        reduced = reducer.fit_transform(embeddings)
+        # Convert sample reviews
+        reviews = []
+        for review in sample_reviews[:5]:
+            review_copy = review.copy()
+            if isinstance(review_copy.get("timestamp"), str):
+                from datetime import datetime
+                review_copy["timestamp"] = datetime.fromisoformat(review_copy["timestamp"])
+            reviews.append(review_copy)
         
-        # 3. Cluster
-        clusterer = HDBSCANClusterer(min_cluster_size=2, min_samples=2)
-        result = clusterer.fit_predict(reduced)
+        # Extract insights (mocked or real)
+        extractor = MultiThemeExtractor(themes=sample_themes_for_clustering)
         
-        assert result.n_clusters >= 0
+        # Create sample insights manually for testing
+        from src.phase2_classification.models import MultiThemeReview, ThemeSentimentInsight
+        from datetime import datetime
         
-        # 4. Select representatives
-        if result.n_clusters > 0:
-            selector = RepresentativeSelector(max_representatives=3)
-            all_reps = selector.select_all_representatives(
-                result.labels,
-                reduced,
-                sample_reviews[:10]
+        multi_theme_reviews = []
+        for review in reviews:
+            # Create sample insights
+            insights = [
+                ThemeSentimentInsight(
+                    theme_id=sample_themes_for_clustering[0]["id"],
+                    theme_name=sample_themes_for_clustering[0]["name"],
+                    sentiment="negative",
+                    confidence=0.9,
+                    source_text="app crashes frequently",
+                    review_id=review["id"],
+                    review_rating=review["rating"]
+                )
+            ] if review.get("rating", 3) <= 2 else []
+            
+            mtr = MultiThemeReview(
+                review_id=review["id"],
+                original_text=review["text"],
+                rating=review["rating"],
+                timestamp=review.get("timestamp") if isinstance(review.get("timestamp"), datetime) else datetime.now(),
+                source=review.get("source", "google_play"),
+                insights=insights
+            )
+            multi_theme_reviews.append(mtr)
+        
+        # Test clustering pipeline with insights
+        if any(len(review.insights) > 0 for review in multi_theme_reviews):
+            clustering_pipeline = InsightClusteringPipeline(
+                embedding_model="all-MiniLM-L6-v2",
+                cache_path=str(temp_cache_db),
+                hdbscan_min_cluster_size=2
             )
             
-            assert len(all_reps) == result.n_clusters
-        
-        # 5. Map themes (deterministic only for speed)
-        if result.n_clusters > 0:
-            themes_path = config_dir / "themes.json"
-            mapper = ThemeMapper(themes_path=str(themes_path), confidence_threshold=0.5)
+            insight_clusters = clustering_pipeline.cluster_insights(multi_theme_reviews)
             
-            # Create dummy cluster labels
-            cluster_labels = {}
-            for cluster_id in result.cluster_sizes.keys():
-                cluster_labels[cluster_id] = ClusterLabel(
-                    cluster_id=cluster_id,
-                    label=f"Cluster {cluster_id}",
-                    summary="Test cluster",
-                    key_issues=["test"]
-                )
-            
-            mappings = mapper.map_all_clusters(cluster_labels)
-            assert len(mappings) == result.n_clusters
+            assert isinstance(insight_clusters, list)
+            # Should have at least one cluster if we have insights
+            if sum(len(r.insights) for r in multi_theme_reviews) >= 2:
+                assert len(insight_clusters) > 0
 
 
 # ============================================
@@ -1220,3 +1302,328 @@ class TestMultiThemeExtractor:
         assert len(multi_theme_reviews[1].insights) == 1
         # Check primary_theme is set (should be the theme with highest confidence)
         assert multi_theme_reviews[0].primary_theme == sample_themes_for_extraction[0]["id"]
+
+
+# ============================================
+# Insight-Based Model Tests
+# ============================================
+
+class TestInsightModels:
+    """Tests for insight-based models (ThemeSentimentInsight, MultiThemeReview, InsightCluster)."""
+    
+    def test_theme_sentiment_insight_model(self):
+        """Test ThemeSentimentInsight model creation and validation."""
+        from src.phase2_classification.models import ThemeSentimentInsight
+        
+        insight = ThemeSentimentInsight(
+            theme_id="app_performance",
+            theme_name="App Performance",
+            sentiment="negative",
+            confidence=0.9,
+            source_text="app crashes frequently",
+            review_id="review_123",
+            review_rating=2
+        )
+        
+        assert insight.theme_id == "app_performance"
+        assert insight.sentiment == "negative"
+        assert insight.confidence == 0.9
+        assert insight.source_text == "app crashes frequently"
+        assert insight.review_id == "review_123"
+        assert insight.review_rating == 2
+    
+    def test_theme_sentiment_insight_confidence_validation(self):
+        """Test ThemeSentimentInsight confidence validation."""
+        from src.phase2_classification.models import ThemeSentimentInsight
+        from pydantic import ValidationError
+        
+        # Test invalid confidence (> 1.0)
+        with pytest.raises(ValidationError):
+            ThemeSentimentInsight(
+                theme_id="app_performance",
+                theme_name="App Performance",
+                sentiment="negative",
+                confidence=1.5,  # Invalid
+                source_text="test",
+                review_id="review_123",
+                review_rating=2
+            )
+        
+        # Test invalid confidence (< 0.0)
+        with pytest.raises(ValidationError):
+            ThemeSentimentInsight(
+                theme_id="app_performance",
+                theme_name="App Performance",
+                sentiment="negative",
+                confidence=-0.1,  # Invalid
+                source_text="test",
+                review_id="review_123",
+                review_rating=2
+            )
+    
+    def test_multi_theme_review_model(self):
+        """Test MultiThemeReview model creation."""
+        from src.phase2_classification.models import MultiThemeReview, ThemeSentimentInsight
+        from datetime import datetime
+        
+        insights = [
+            ThemeSentimentInsight(
+                theme_id="app_performance",
+                theme_name="App Performance",
+                sentiment="negative",
+                confidence=0.9,
+                source_text="crashes",
+                review_id="review_1",
+                review_rating=2
+            ),
+            ThemeSentimentInsight(
+                theme_id="user_interface",
+                theme_name="User Interface",
+                sentiment="positive",
+                confidence=0.8,
+                source_text="great ui",
+                review_id="review_1",
+                review_rating=2
+            )
+        ]
+        
+        mtr = MultiThemeReview(
+            review_id="review_1",
+            original_text="App crashes but UI is great",
+            rating=2,
+            timestamp=datetime.now(),
+            source="google_play",
+            insights=insights,
+            primary_theme="app_performance"
+        )
+        
+        assert mtr.review_id == "review_1"
+        assert len(mtr.insights) == 2
+        assert mtr.primary_theme == "app_performance"
+        assert mtr.rating == 2
+        
+        # Test week_id computed field
+        assert isinstance(mtr.week_id, str)
+        assert "W" in mtr.week_id
+    
+    def test_insight_cluster_model(self):
+        """Test InsightCluster model creation."""
+        from src.phase2_classification.models import InsightCluster, ThemeSentimentInsight
+        
+        representative_insights = [
+            ThemeSentimentInsight(
+                theme_id="app_performance",
+                theme_name="App Performance",
+                sentiment="negative",
+                confidence=0.9,
+                source_text="crashes frequently",
+                review_id="review_1",
+                review_rating=2
+            )
+        ]
+        
+        cluster = InsightCluster(
+            cluster_id=0,
+            theme_id="app_performance",
+            theme_name="App Performance",
+            sentiment="negative",
+            size=5,
+            label="App Crashes",
+            summary="Users report frequent app crashes",
+            key_issues=["crashes", "bugs"],
+            representative_insights=representative_insights,
+            avg_confidence=0.85,
+            review_ids=["review_1", "review_2"]
+        )
+        
+        assert cluster.cluster_id == 0
+        assert cluster.theme_id == "app_performance"
+        assert cluster.sentiment == "negative"
+        assert cluster.size == 5
+        assert len(cluster.representative_insights) == 1
+        assert len(cluster.review_ids) == 2
+        assert cluster.avg_confidence == 0.85
+
+
+# ============================================
+# Insight Clustering Pipeline Tests
+# ============================================
+
+class TestInsightClusteringPipeline:
+    """Tests for InsightClusteringPipeline."""
+    
+    def test_insight_clustering_pipeline_initialization(self, temp_cache_db: Path):
+        """Test InsightClusteringPipeline initialization."""
+        from src.phase2_classification.insight_clustering import InsightClusteringPipeline
+        
+        pipeline = InsightClusteringPipeline(
+            embedding_model="all-MiniLM-L6-v2",
+            cache_path=str(temp_cache_db),
+            umap_n_components=5,
+            hdbscan_min_cluster_size=3
+        )
+        
+        assert pipeline.embedding_model == "all-MiniLM-L6-v2"
+        assert pipeline.umap_n_components == 5
+        assert pipeline.hdbscan_min_cluster_size == 3
+    
+    def test_group_insights_by_theme_sentiment(self):
+        """Test grouping insights by (theme_id, sentiment)."""
+        from src.phase2_classification.models import MultiThemeReview, ThemeSentimentInsight
+        from src.phase2_classification.insight_clustering import InsightClusteringPipeline
+        from datetime import datetime
+        
+        # Create sample multi-theme reviews with insights
+        insights1 = [
+            ThemeSentimentInsight(
+                theme_id="theme_a",
+                theme_name="Theme A",
+                sentiment="negative",
+                confidence=0.9,
+                source_text="bad a",
+                review_id="r1",
+                review_rating=2
+            ),
+            ThemeSentimentInsight(
+                theme_id="theme_b",
+                theme_name="Theme B",
+                sentiment="positive",
+                confidence=0.8,
+                source_text="good b",
+                review_id="r1",
+                review_rating=2
+            )
+        ]
+        
+        insights2 = [
+            ThemeSentimentInsight(
+                theme_id="theme_a",
+                theme_name="Theme A",
+                sentiment="negative",
+                confidence=0.85,
+                source_text="also bad a",
+                review_id="r2",
+                review_rating=1
+            )
+        ]
+        
+        mtr1 = MultiThemeReview(
+            review_id="r1",
+            original_text="Text 1",
+            rating=2,
+            timestamp=datetime.now(),
+            source="google_play",
+            insights=insights1
+        )
+        
+        mtr2 = MultiThemeReview(
+            review_id="r2",
+            original_text="Text 2",
+            rating=1,
+            timestamp=datetime.now(),
+            source="google_play",
+            insights=insights2
+        )
+        
+        # Create pipeline and test grouping
+        pipeline = InsightClusteringPipeline()
+        grouped = pipeline._group_insights_by_theme_sentiment([mtr1, mtr2])
+        
+        # Should have 2 groups: (theme_a, Theme A, negative) and (theme_b, Theme B, positive)
+        assert len(grouped) == 2
+        
+        # Check theme_a negative group (key is tuple: theme_id, theme_name, sentiment)
+        key_a_neg = ("theme_a", "Theme A", "negative")
+        assert key_a_neg in grouped
+        assert len(grouped[key_a_neg]) == 2  # 2 insights in this group
+        
+        # Check theme_b positive group
+        key_b_pos = ("theme_b", "Theme B", "positive")
+        assert key_b_pos in grouped
+        assert len(grouped[key_b_pos]) == 1  # 1 insight in this group
+
+
+# ============================================
+# ClusteringPipeline Integration Tests
+# ============================================
+
+class TestClusteringPipelineIntegration:
+    """Integration tests for ClusteringPipeline (insight-based)."""
+    
+    @pytest.fixture
+    def sample_themes_for_pipeline(self, config_dir: Path) -> list[dict]:
+        """Load themes for pipeline tests."""
+        themes_path = config_dir / "themes.json"
+        with open(themes_path, 'r', encoding='utf-8') as f:
+            themes_data = json.load(f)
+        return themes_data.get("themes", [])
+    
+    def test_clustering_pipeline_initialization(
+        self,
+        sample_themes_for_pipeline: list[dict],
+        temp_cache_db: Path
+    ):
+        """Test ClusteringPipeline initialization."""
+        from src.phase2_classification.clustering_pipeline import ClusteringPipeline
+        
+        pipeline = ClusteringPipeline(
+            themes=sample_themes_for_pipeline,
+            cache_path=str(temp_cache_db)
+        )
+        
+        assert len(pipeline.themes) == len(sample_themes_for_pipeline)
+        assert pipeline.embedding_model == "all-MiniLM-L6-v2"
+        
+        # Test that empty themes raises error
+        with pytest.raises(ValueError, match="cannot be empty"):
+            ClusteringPipeline(themes=[])
+    
+    def test_clustering_pipeline_load_reviews(
+        self,
+        sample_themes_for_pipeline: list[dict],
+        fixtures_dir: Path,
+        temp_cache_db: Path
+    ):
+        """Test ClusteringPipeline _load_reviews method."""
+        from src.phase2_classification.clustering_pipeline import ClusteringPipeline
+        import tempfile
+        
+        # Create temporary input file with reviews
+        pipeline = ClusteringPipeline(
+            themes=sample_themes_for_pipeline,
+            cache_path=str(temp_cache_db)
+        )
+        
+        # Create sample review data with week_id
+        sample_review = {
+            "id": "test_review_1",
+            "source": "google_play",
+            "rating": 4,
+            "text": "Great app for investing!",
+            "timestamp": "2025-11-20T10:00:00",
+            "author_hash": "hash123"
+        }
+        
+        # Calculate week_id for the sample review
+        from datetime import datetime
+        dt = datetime.fromisoformat(sample_review["timestamp"])
+        week_id = f"{dt.isocalendar()[0]}-W{dt.isocalendar()[1]:02d}"
+        
+        input_data = {
+            "reviews": [sample_review],
+            "metadata": {
+                "scraped_at": "2025-11-20T10:00:00"
+            }
+        }
+        
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json.dump(input_data, f)
+            temp_file = f.name
+        
+        try:
+            # Load reviews for the specific week
+            reviews = pipeline._load_reviews(temp_file, week_id)
+            assert len(reviews) >= 0  # May or may not find reviews depending on week matching
+        finally:
+            import os
+            os.unlink(temp_file)

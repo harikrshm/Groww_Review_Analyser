@@ -1,15 +1,15 @@
-"""LLM-based multi-theme insight extractor from reviews."""
+"""Embedding-based multi-theme insight extractor from reviews."""
 
-import json
 import logging
-import time
+import re
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
 
-from jinja2 import Environment, FileSystemLoader
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
 
-from src.shared.llm_client import get_llm_client
+from src.phase2_classification.embeddings.generator import EmbeddingGenerator
 from src.phase2_classification.models import ThemeSentimentInsight, MultiThemeReview
 from src.phase1_scraping.models import RawReview
 
@@ -17,16 +17,27 @@ logger = logging.getLogger(__name__)
 
 
 class MultiThemeExtractor:
-    """Extracts multiple theme-sentiment insights from reviews using LLM."""
+    """Extracts multiple theme-sentiment insights from reviews using embedding similarity."""
     
-    def __init__(self, themes: List[Dict[str, Any]], batch_size: int = 10, delay_between_batches: float = 1.0):
+    def __init__(
+        self,
+        themes: List[Dict[str, Any]],
+        embedding_model: str = "all-MiniLM-L6-v2",
+        cache_path: str = "data/classified/embeddings.db",
+        similarity_threshold: float = 0.3,
+        min_confidence: float = 0.4,
+        batch_size: int = 32
+    ):
         """
-        Initialize multi-theme extractor.
+        Initialize multi-theme extractor with embedding-based matching.
         
         Args:
             themes: List of theme dictionaries with 'id', 'name', 'description', 'keywords'
-            batch_size: Number of reviews to process in parallel (Groq rate limits)
-            delay_between_batches: Delay in seconds between batches to respect rate limits
+            embedding_model: Model name for embeddings (default: all-MiniLM-L6-v2)
+            cache_path: Path to embedding cache database
+            similarity_threshold: Minimum cosine similarity to match a theme (0.0-1.0)
+            min_confidence: Minimum confidence score for an insight to be included
+            batch_size: Batch size for embedding generation
         """
         if not themes:
             raise ValueError("Themes list cannot be empty")
@@ -34,32 +45,200 @@ class MultiThemeExtractor:
         self.themes = themes
         self.theme_ids = {theme["id"] for theme in themes}
         self.theme_map = {theme["id"]: theme for theme in themes}
+        self.similarity_threshold = similarity_threshold
+        self.min_confidence = min_confidence
         self.batch_size = batch_size
-        self.delay_between_batches = delay_between_batches
         
-        self.llm_client = get_llm_client()
+        # Initialize embedding generator
+        self.embedding_generator = EmbeddingGenerator(
+            model_name=embedding_model,
+            cache_path=cache_path,
+            use_cache=True
+        )
         
-        # Setup Jinja2 environment
-        template_dir = Path("templates/prompts")
-        self.env = Environment(loader=FileSystemLoader(str(template_dir)))
-        self.template = self.env.get_template("multi_theme_extraction.j2")
+        # Pre-compute theme embeddings (lazy initialization)
+        self._theme_embeddings = None
+        self._theme_texts = None
         
-        logger.info(f"MultiThemeExtractor initialized with {len(themes)} themes, batch_size={batch_size}")
+        logger.info(
+            f"MultiThemeExtractor initialized with {len(themes)} themes, "
+            f"similarity_threshold={similarity_threshold}, min_confidence={min_confidence}"
+        )
+    
+    def _build_theme_texts(self) -> Dict[str, str]:
+        """
+        Build text representations for each theme (description + keywords).
+        
+        Returns:
+            Dict mapping theme_id -> combined text representation
+        """
+        theme_texts = {}
+        for theme in self.themes:
+            theme_id = theme["id"]
+            description = theme.get("description", "")
+            keywords = theme.get("keywords", [])
+            
+            # Combine description and keywords for better matching
+            keywords_str = ", ".join(keywords)
+            combined_text = f"{description}. Keywords: {keywords_str}"
+            
+            theme_texts[theme_id] = combined_text
+        
+        return theme_texts
+    
+    def _precompute_theme_embeddings(self) -> Tuple[np.ndarray, List[str]]:
+        """
+        Pre-compute embeddings for all themes.
+        
+        Returns:
+            Tuple of (embeddings array, theme_ids list)
+        """
+        if self._theme_embeddings is not None:
+            return self._theme_embeddings, self._theme_texts
+        
+        logger.info("Pre-computing theme embeddings...")
+        theme_texts_dict = self._build_theme_texts()
+        
+        # Extract theme IDs and texts in consistent order
+        theme_ids_list = [theme["id"] for theme in self.themes]
+        theme_texts_list = [theme_texts_dict[theme_id] for theme_id in theme_ids_list]
+        
+        # Generate embeddings
+        embeddings = self.embedding_generator.embed_texts(
+            theme_texts_list,
+            batch_size=len(theme_texts_list),
+            show_progress=False
+        )
+        
+        self._theme_embeddings = embeddings
+        self._theme_texts = theme_ids_list
+        
+        logger.info(f"Pre-computed embeddings for {len(theme_ids_list)} themes")
+        return embeddings, theme_ids_list
+    
+    def _split_into_sentences(self, text: str) -> List[Tuple[str, int]]:
+        """
+        Split text into sentences with their positions.
+        
+        Args:
+            text: Review text
+            
+        Returns:
+            List of (sentence, start_position) tuples
+        """
+        # Simple sentence splitting: split on sentence endings
+        # Pattern matches: . ! ? followed by whitespace or end of string
+        sentence_pattern = r'(?<=[.!?])\s+'
+        sentence_parts = re.split(sentence_pattern, text)
+        
+        sentences = []
+        current_pos = 0
+        
+        for part in sentence_parts:
+            part = part.strip()
+            if not part:
+                continue
+            
+            # Only include sentences with meaningful length (at least 10 characters)
+            if len(part) >= 10:
+                sentences.append((part, current_pos))
+                current_pos += len(part) + 1  # Approximate position
+        
+        # Fallback for reviews without clear sentence boundaries
+        if len(sentences) <= 1 and len(text) > 100:
+            # Try splitting by commas for very long text without sentence endings
+            comma_parts = text.split(',')
+            sentences = []
+            current_pos = 0
+            
+            for part in comma_parts:
+                part = part.strip()
+                if len(part) >= 15:  # Longer threshold for comma-separated segments
+                    sentences.append((part, current_pos))
+                    current_pos += len(part) + 1
+        
+        # Final fallback: use whole text as single sentence
+        if not sentences:
+            sentences = [(text.strip(), 0)]
+        
+        return sentences
+    
+    def _determine_sentiment(
+        self,
+        text: str,
+        rating: int,
+        theme: Dict[str, Any]
+    ) -> Tuple[str, float]:
+        """
+        Determine sentiment from text patterns and rating.
+        
+        Args:
+            text: Sentence or text segment
+            rating: Review rating (1-5)
+            theme: Theme dictionary with sentiment_indicators
+            
+        Returns:
+            Tuple of (sentiment, confidence)
+        """
+        text_lower = text.lower()
+        
+        # Get sentiment indicators from theme config
+        sentiment_indicators = theme.get("sentiment_indicators", {})
+        negative_keywords = [kw.lower() for kw in sentiment_indicators.get("negative", [])]
+        positive_keywords = [kw.lower() for kw in sentiment_indicators.get("positive", [])]
+        
+        # Count keyword matches
+        negative_score = sum(1 for kw in negative_keywords if kw in text_lower)
+        positive_score = sum(1 for kw in positive_keywords if kw in text_lower)
+        
+        # Also use rating as a signal
+        rating_signal = "positive" if rating >= 4 else "negative" if rating <= 2 else "neutral"
+        
+        # Common negative patterns
+        negative_patterns = [
+            r'\b(not|no|never|worst|bad|terrible|awful|hate|disappointed|frustrated|failed|error|bug|crash|slow|lag|broken)\b',
+            r'\b(too\s+\w+|very\s+bad|very\s+slow|very\s+poor)\b'
+        ]
+        negative_pattern_matches = sum(
+            1 for pattern in negative_patterns if re.search(pattern, text_lower)
+        )
+        
+        # Common positive patterns
+        positive_patterns = [
+            r'\b(great|excellent|amazing|love|good|best|perfect|fast|smooth|easy|intuitive|helpful)\b',
+            r'\b(very\s+good|very\s+fast|very\s+easy|works\s+well)\b'
+        ]
+        positive_pattern_matches = sum(
+            1 for pattern in positive_patterns if re.search(pattern, text_lower)
+        )
+        
+        # Combine signals
+        negative_total = negative_score + negative_pattern_matches + (1 if rating <= 2 else 0)
+        positive_total = positive_score + positive_pattern_matches + (1 if rating >= 4 else 0)
+        
+        # Determine sentiment
+        if negative_total > positive_total:
+            confidence = min(0.95, 0.5 + (negative_total - positive_total) * 0.1)
+            return "negative", confidence
+        elif positive_total > negative_total:
+            confidence = min(0.95, 0.5 + (positive_total - negative_total) * 0.1)
+            return "positive", confidence
+        else:
+            # Neutral or tie
+            return "neutral", 0.5
     
     def extract_insights(
         self,
-        review: Dict[str, Any],
-        retry_on_error: bool = True
+        review: Dict[str, Any]
     ) -> List[ThemeSentimentInsight]:
         """
-        Extract all theme-sentiment insights from a single review.
+        Extract all theme-sentiment insights from a single review using embeddings.
         
         Args:
             review: Review dictionary from Phase 1 output (must have 'id', 'text', 'rating', 'timestamp', 'source')
-            retry_on_error: Whether to retry on extraction errors
         
         Returns:
-            List of ThemeSentimentInsight objects (empty list if no themes found or error)
+            List of ThemeSentimentInsight objects (empty list if no themes found)
         """
         try:
             review_id = review.get("id", "")
@@ -67,104 +246,99 @@ class MultiThemeExtractor:
             review_rating = review.get("rating", 0)
             
             if not review_text:
-                logger.warning(f"Review {review_id} has empty text, skipping")
+                logger.debug(f"Review {review_id} has empty text, skipping")
                 return []
             
-            # Render prompt template
-            prompt = self.template.render(
-                review_text=review_text,
-                rating=review_rating,
-                review_id=review_id,
-                themes=self.themes
-            )
+            # Pre-compute theme embeddings if not already done
+            theme_embeddings, theme_ids_list = self._precompute_theme_embeddings()
             
-            # System prompt
-            system_prompt = """You are an expert at analyzing app store reviews and extracting multiple theme-sentiment insights.
-Your task is to identify ALL themes mentioned in a review and extract the sentiment for each theme.
-Only map to themes from the provided list - do not create new themes.
-Be thorough and extract all relevant theme-sentiment pairs from each review."""
+            # Split review into sentences
+            sentences = self._split_into_sentences(review_text)
             
-            # Get insights from LLM
-            result = self.llm_client.generate_json(
-                prompt=prompt,
-                system_prompt=system_prompt,
-                use_case="multi_theme_extraction"
-            )
-            
-            # Extract insights array
-            insights_data = result.get("insights", [])
-            if not insights_data:
-                logger.debug(f"No insights extracted from review {review_id}")
+            if not sentences:
+                logger.debug(f"Review {review_id} has no valid sentences")
                 return []
             
-            # Validate and build ThemeSentimentInsight objects
-            validated_insights = []
-            for insight_data in insights_data:
-                try:
-                    # Validate theme_id exists in provided themes
-                    theme_id = insight_data.get("theme_id")
-                    if theme_id not in self.theme_ids:
-                        logger.warning(
-                            f"Invalid theme_id '{theme_id}' returned by LLM for review {review_id}. "
-                            f"Skipping this insight."
-                        )
-                        continue
-                    
-                    # Get theme info
-                    theme = self.theme_map[theme_id]
-                    theme_name = insight_data.get("theme_name") or theme.get("name", theme_id)
-                    
-                    # Validate sentiment
-                    sentiment = insight_data.get("sentiment", "").lower()
-                    if sentiment not in ["positive", "negative", "neutral"]:
-                        logger.warning(
-                            f"Invalid sentiment '{sentiment}' for theme '{theme_id}' in review {review_id}. "
-                            f"Defaulting to 'neutral'."
-                        )
-                        sentiment = "neutral"
-                    
-                    # Validate confidence
-                    confidence = float(insight_data.get("confidence", 0.5))
-                    confidence = max(0.0, min(1.0, confidence))  # Clamp to [0.0, 1.0]
-                    
-                    # Validate source_text
-                    source_text = insight_data.get("source_text", "").strip()
-                    if not source_text:
-                        logger.warning(
-                            f"Missing source_text for theme '{theme_id}' in review {review_id}. "
-                            f"Using review text excerpt."
-                        )
-                        # Use first 100 chars of review as fallback
-                        source_text = review_text[:100] + ("..." if len(review_text) > 100 else "")
-                    
-                    # Create insight
-                    insight = ThemeSentimentInsight(
-                        theme_id=theme_id,
-                        theme_name=theme_name,
-                        sentiment=sentiment,
-                        confidence=confidence,
-                        source_text=source_text,
-                        review_id=review_id,
-                        review_rating=review_rating
-                    )
-                    
-                    validated_insights.append(insight)
-                    
-                except Exception as e:
-                    logger.error(
-                        f"Failed to create insight from data {insight_data} for review {review_id}: {e}"
-                    )
-                    continue
+            # Extract sentence texts
+            sentence_texts = [s[0] for s in sentences]
             
-            logger.debug(f"Extracted {len(validated_insights)} insights from review {review_id}")
-            return validated_insights
+            # Generate embeddings for all sentences
+            sentence_embeddings = self.embedding_generator.embed_texts(
+                sentence_texts,
+                batch_size=self.batch_size,
+                show_progress=False
+            )
+            
+            # Compute similarity matrix: sentences x themes
+            similarity_matrix = cosine_similarity(sentence_embeddings, theme_embeddings)
+            
+            # Extract insights from similarity scores
+            insights = []
+            theme_insight_map = {}  # Track best match per theme
+            
+            for sentence_idx, (sentence_text, _) in enumerate(sentences):
+                # Get similarities for this sentence to all themes
+                similarities = similarity_matrix[sentence_idx]
+                
+                # Find themes above threshold
+                for theme_idx, similarity in enumerate(similarities):
+                    if similarity >= self.similarity_threshold:
+                        theme_id = theme_ids_list[theme_idx]
+                        theme = self.theme_map[theme_id]
+                        
+                        # Determine sentiment
+                        sentiment, sentiment_confidence = self._determine_sentiment(
+                            sentence_text,
+                            review_rating,
+                            theme
+                        )
+                        
+                        # Calculate overall confidence (similarity + sentiment confidence)
+                        overall_confidence = (similarity * 0.7) + (sentiment_confidence * 0.3)
+                        
+                        # Only include if above minimum confidence
+                        if overall_confidence < self.min_confidence:
+                            continue
+                        
+                        # Track best match per theme (if multiple sentences match same theme)
+                        if theme_id not in theme_insight_map:
+                            theme_insight_map[theme_id] = {
+                                "sentence": sentence_text,
+                                "similarity": similarity,
+                                "sentiment": sentiment,
+                                "confidence": overall_confidence
+                            }
+                        else:
+                            # Keep the best match (highest similarity)
+                            if similarity > theme_insight_map[theme_id]["similarity"]:
+                                theme_insight_map[theme_id] = {
+                                    "sentence": sentence_text,
+                                    "similarity": similarity,
+                                    "sentiment": sentiment,
+                                    "confidence": overall_confidence
+                                }
+            
+            # Create insight objects from best matches
+            for theme_id, match_data in theme_insight_map.items():
+                theme = self.theme_map[theme_id]
+                
+                insight = ThemeSentimentInsight(
+                    theme_id=theme_id,
+                    theme_name=theme.get("name", theme_id),
+                    sentiment=match_data["sentiment"],
+                    confidence=match_data["confidence"],
+                    source_text=match_data["sentence"][:200],  # Limit source_text length
+                    review_id=review_id,
+                    review_rating=review_rating
+                )
+                
+                insights.append(insight)
+            
+            logger.debug(f"Extracted {len(insights)} insights from review {review_id}")
+            return insights
             
         except Exception as e:
-            logger.error(f"Failed to extract insights from review {review.get('id')}: {e}")
-            if retry_on_error:
-                logger.info("Retrying insight extraction...")
-                time.sleep(1)
-                return self.extract_insights(review, retry_on_error=False)
+            logger.error(f"Failed to extract insights from review {review.get('id')}: {e}", exc_info=True)
             return []
     
     def extract_all_reviews(
@@ -185,54 +359,59 @@ Be thorough and extract all relevant theme-sentiment pairs from each review."""
         multi_theme_reviews = []
         total = len(reviews)
         
-        logger.info(f"Extracting insights from {total} reviews...")
+        logger.info(f"Extracting insights from {total} reviews using embeddings...")
         
-        for i, review in enumerate(reviews, 1):
-            try:
-                # Extract insights
-                insights = self.extract_insights(review)
-                
-                # Parse timestamp if it's a string
-                timestamp = review.get("timestamp")
-                if isinstance(timestamp, str):
-                    timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-                elif not isinstance(timestamp, datetime):
-                    logger.warning(f"Invalid timestamp for review {review.get('id')}, using current time")
-                    timestamp = datetime.now()
-                
-                # Determine primary theme (theme with highest confidence, or None if no insights)
-                primary_theme = None
-                if insights:
-                    # Find insight with highest confidence
-                    primary_insight = max(insights, key=lambda x: x.confidence)
-                    primary_theme = primary_insight.theme_id
-                
-                # Create MultiThemeReview
-                multi_theme_review = MultiThemeReview(
-                    review_id=review.get("id"),
-                    original_text=review.get("text", ""),
-                    rating=review.get("rating", 0),
-                    timestamp=timestamp,
-                    source=review.get("source", "google_play"),
-                    insights=insights,
-                    primary_theme=primary_theme
-                )
-                
-                multi_theme_reviews.append(multi_theme_review)
-                
-                # Progress callback
-                if progress_callback:
-                    progress_callback(i, total)
-                
-                # Rate limiting: delay between batches
-                if i % self.batch_size == 0 and i < total:
-                    logger.debug(f"Processed {i}/{total} reviews, waiting {self.delay_between_batches}s...")
-                    time.sleep(self.delay_between_batches)
-                
-            except Exception as e:
-                logger.error(f"Failed to process review {review.get('id')}: {e}")
-                # Continue with next review
-                continue
+        # Pre-compute theme embeddings once for all reviews
+        self._precompute_theme_embeddings()
+        
+        # Process reviews in batches for efficiency
+        for batch_start in range(0, total, self.batch_size):
+            batch_end = min(batch_start + self.batch_size, total)
+            batch_reviews = reviews[batch_start:batch_end]
+            
+            logger.debug(f"Processing batch {batch_start//self.batch_size + 1}: reviews {batch_start+1}-{batch_end}")
+            
+            for review in batch_reviews:
+                try:
+                    # Extract insights
+                    insights = self.extract_insights(review)
+                    
+                    # Parse timestamp if it's a string
+                    timestamp = review.get("timestamp")
+                    if isinstance(timestamp, str):
+                        timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                    elif not isinstance(timestamp, datetime):
+                        logger.warning(f"Invalid timestamp for review {review.get('id')}, using current time")
+                        timestamp = datetime.now()
+                    
+                    # Determine primary theme (theme with highest confidence, or None if no insights)
+                    primary_theme = None
+                    if insights:
+                        # Find insight with highest confidence
+                        primary_insight = max(insights, key=lambda x: x.confidence)
+                        primary_theme = primary_insight.theme_id
+                    
+                    # Create MultiThemeReview
+                    multi_theme_review = MultiThemeReview(
+                        review_id=review.get("id"),
+                        original_text=review.get("text", ""),
+                        rating=review.get("rating", 0),
+                        timestamp=timestamp,
+                        source=review.get("source", "google_play"),
+                        insights=insights,
+                        primary_theme=primary_theme
+                    )
+                    
+                    multi_theme_reviews.append(multi_theme_review)
+                    
+                    # Progress callback
+                    if progress_callback:
+                        progress_callback(len(multi_theme_reviews), total)
+                    
+                except Exception as e:
+                    logger.error(f"Failed to process review {review.get('id')}: {e}")
+                    # Continue with next review
+                    continue
         
         logger.info(f"Successfully extracted insights from {len(multi_theme_reviews)}/{total} reviews")
         return multi_theme_reviews
@@ -269,4 +448,3 @@ Be thorough and extract all relevant theme-sentiment pairs from each review."""
             review_dicts.append(review_dict)
         
         return self.extract_all_reviews(review_dicts, progress_callback)
-

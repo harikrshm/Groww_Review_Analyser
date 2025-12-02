@@ -19,9 +19,9 @@
             padding: 40px 0;
         }
         
-        /* Layout Container */
+        /* Layout Container - Horizontal Layout */
         .container {
-            max-width: 640px;
+            max-width: 1200px;
             margin: 0 auto;
             background-color: #FFFFFF;
             border-radius: 16px;
@@ -111,17 +111,26 @@
         
         <!-- HEADER -->
         <tr>
-            <td class="header-bg" style="padding: 32px;">
-                <table width="100%">
+            <td class="header-bg" style="padding: 0;">
+                <!-- Text logo -->
+                <table width="100%" cellpadding="0" cellspacing="0" border="0">
                     <tr>
-                        <td>
-                            <div style="font-size: 11px; color: #94A3B8; letter-spacing: 1px; font-weight: 600; margin-bottom: 8px;">
-                                ⚡WEEKLY PULSE
+                        <td align="center" style="padding: 24px 32px 16px 32px;">
+                            <div style="font-size: 24px; color: #FFFFFF; font-weight: 700; letter-spacing: 2px;">
+                                ⚡ WEEKLY PULSE
                             </div>
+                        </td>
+                    </tr>
+                </table>
+                
+                <!-- Header Content -->
+                <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                        <td style="padding: 0 32px 32px 32px;">
                             <h1 style="margin: 0 0 8px 0; font-size: 24px; font-weight: 700; color: #FFFFFF; line-height: 1.2;">
                                 {{ summary.title }}
                             </h1>
-                            <div style="font-size: 13px; color: #E2E8F0; display: flex; align-items: center; flex-wrap: wrap;">
+                            <div style="font-size: 13px; color: #E2E8F0; display: flex; align-items: center; flex-wrap: wrap; margin-bottom: 12px;">
                                 <span> 📆{{ summary.date_range }}</span>
                                 <span style="margin: 0 8px; opacity: 0.5;">|</span>
                                 <span>{{ summary.total_reviews }} ✍🏼Reviews</span>
@@ -130,13 +139,23 @@
                                 <span>{{ summary.total_insights }} 💡Insights</span>
                                 {% endif %}
                             </div>
+                            {% if themes %}
+                            <div style="font-size: 12px; color: #CBD5E1; margin-top: 8px;">
+                                <span style="font-weight: 600; margin-right: 8px;">🎯 Themes Analyzed:</span>
+                                <span style="display: inline-block;">
+                                    {% for theme in themes %}
+                                        <span style="background-color: rgba(255, 255, 255, 0.1); padding: 4px 10px; border-radius: 12px; margin-right: 6px; margin-bottom: 4px; display: inline-block;">{{ theme.theme_name }}</span>{% if not loop.last %}{% endif %}
+                                    {% endfor %}
+                                </span>
+                            </div>
+                            {% endif %}
                         </td>
                     </tr>
                 </table>
             </td>
         </tr>
 
-        <!-- SUMMARY SECTION -->
+        <!-- SUMMARY (FULL WIDTH) -->
         <tr>
             <td style="padding: 24px 32px 12px 32px;">
                 <div style="border-bottom: 1px solid #E2E8F0; padding-bottom: 24px;">
@@ -201,7 +220,7 @@
             </td>
         </tr>
 
-        <!-- ACTION PLAN -->
+        <!-- ACTION PLAN (FULL WIDTH - BELOW INSIGHTS) -->
         <tr>
             <td style="padding: 16px 32px;">
                 <div class="action-box">
@@ -226,7 +245,7 @@
             </td>
         </tr>
 
-        <!-- NUMBERS -->
+        <!-- NUMBERS (GRAPH) -->
         <tr>
             <td style="padding: 24px 32px 32px 32px;">
                 <h3 style="font-size: 13px; color: #64748B; text-transform: uppercase; font-weight: 700; margin: 0 0 20px 0;">

@@ -1,0 +1,50 @@
+You are drafting a professional email reply for a review analysis report.
+
+## Original Request
+**From:** {{ original_sender }}
+**Subject:** {{ original_subject }}
+**Body:** {{ original_body }}
+
+## Analysis Summary
+**Time Period:** {{ time_period }}
+**Total Reviews:** {{ total_reviews }}
+**Total Insights:** {{ total_insights }}
+**Report Title:** {{ report_title }}
+
+**Key Highlights:**
+{{ summary_highlights }}
+
+## Task
+Generate a professional email reply that:
+
+1. **Subject Line**: Create a contextual reply subject
+   - Reference the original request
+   - Include the time period analyzed
+   - Example: "Re: Review Analysis - Last 4 Weeks (Nov 6-13, 2025)"
+
+2. **Email Body**: Write a professional reply incorporating:
+   - Acknowledge the original request
+   - Provide a brief summary of findings (2-3 sentences)
+   - Mention key insights from the analysis
+   - Note that the full report is attached/embedded
+   - Offer to provide more details if needed
+   - Keep it concise (3-4 paragraphs max)
+
+## Tone
+- Professional and friendly
+- Clear and concise
+- Actionable insights
+- Appreciative of the request
+
+## Response Format
+Return a JSON object:
+```json
+{
+  "subject": "Reply subject line here",
+  "body_text": "Plain text email body here",
+  "body_html": "HTML email body here (optional, can be same as text)"
+}
+```
+
+Generate the reply email now.
+

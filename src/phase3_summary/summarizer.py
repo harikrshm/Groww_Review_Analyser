@@ -98,7 +98,20 @@ class Summarizer:
         # 4. Clean PII from generated content (double safety)
         self._clean_pii_from_response(response_json)
         
-        # 5. Build result model
+        # 5. Ensure is_positive field is set for all insights (auto-populate if missing)
+        positive_insights = response_json.get("positive_insights", [])
+        negative_insights = response_json.get("negative_insights", [])
+        
+        # Set is_positive field automatically based on which array the insight is in
+        for insight in positive_insights:
+            if "is_positive" not in insight:
+                insight["is_positive"] = True
+        
+        for insight in negative_insights:
+            if "is_positive" not in insight:
+                insight["is_positive"] = False
+        
+        # 6. Build result model
         return WeeklyPulseSummary(
             week_id=week_id,
             date_range=date_range,
@@ -106,16 +119,16 @@ class Summarizer:
             total_insights=total_insights if is_insight_based else None,
             title=response_json.get("title", f"Weekly Pulse: {week_id}"),
             executive_summary=response_json.get("executive_summary", ""),
-            positive_insights=response_json.get("positive_insights", []),
-            negative_insights=response_json.get("negative_insights", []),
+            positive_insights=positive_insights,
+            negative_insights=negative_insights,
             action_plan=response_json.get("action_plan", []),
             model_name=self.llm_client.model
         )
     
     def _format_week_date_range(self, week_id: str) -> str:
         """
-        Convert ISO week (e.g. '2025-W47') to month-based format.
-        Format: 'Nov 3rd week' or 'Nov 4th week' (never mention week numbers like W47)
+        Convert ISO week (e.g. '2025-W47') to actual date range format.
+        Format: 'Nov 6 - Nov 13, 2025' (shows actual start and end dates)
         """
         try:
             year_str, week_str = week_id.split('-W')
@@ -124,32 +137,21 @@ class Summarizer:
             
             # Get first day of week (Monday)
             start_date = datetime.fromisocalendar(year, week, 1)
+            # Get last day of week (Sunday)
+            end_date = start_date + timedelta(days=6)
             
-            # Get month name
-            month_name = start_date.strftime("%b")
+            # Format: "Nov 6 - Nov 13, 2025" or "Nov 30 - Dec 6, 2025" if cross-month
+            start_month = start_date.strftime("%b")
+            end_month = end_date.strftime("%b")
+            start_day = start_date.day
+            end_day = end_date.day
             
-            # Calculate which week of the month (1st, 2nd, 3rd, 4th, 5th)
-            # Count how many Mondays have passed in this month
-            first_day_of_month = datetime(start_date.year, start_date.month, 1)
-            # Find the first Monday of the month
-            days_until_monday = (7 - first_day_of_month.weekday()) % 7
-            if days_until_monday == 7:
-                days_until_monday = 0
-            first_monday = first_day_of_month + timedelta(days=days_until_monday)
-            
-            # Calculate week number (1-based)
-            days_diff = (start_date - first_monday).days
-            week_of_month = (days_diff // 7) + 1
-            
-            # Handle edge case: if start_date is before first Monday, it's week 1
-            if start_date < first_monday:
-                week_of_month = 1
-            
-            # Format ordinal (1st, 2nd, 3rd, 4th, 5th)
-            ordinals = {1: "1st", 2: "2nd", 3: "3rd", 4: "4th", 5: "5th"}
-            week_ordinal = ordinals.get(week_of_month, f"{week_of_month}th")
-            
-            return f"{month_name} {week_ordinal} week"
+            if start_month == end_month:
+                # Same month: "Nov 6 - 13, 2025"
+                return f"{start_month} {start_day} - {end_day}, {year}"
+            else:
+                # Different months: "Nov 30 - Dec 6, 2025"
+                return f"{start_month} {start_day} - {end_month} {end_day}, {year}"
         except Exception as e:
             logger.warning(f"Date formatting failed for {week_id}: {e}")
             return week_id
