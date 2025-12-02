@@ -1,0 +1,22 @@
+ #Task Implementation
+ - run work through the task list one sub-task at a time. 
+ do not start with the next sub task until you ask the user for permission. stop and ask user approval and proceed with next sub task when after user  say "yes" or "y"
+
+ task completion protocol
+
+   - Mark sub tasks as completed by changing `[ ]` to `[x]`
+   - when all sub tasks are finished, mark the main task `[ ]` to `[x]`
+   -stop after each sub-task and wait for users go ahead.
+
+   #task list maintenance
+   - update the task list as you work
+   - mark tasks and subtasks as completed per protocol above
+   - add new tasks as they emerge
+
+when working with tasks list, the AI must:
+1. regularly update the task list file after finishing any significant work
+2. follow the completion protocol
+3.keep relevant files accurate and up to date
+4. check before starting what is the next sub-task
+5. after completing the a sub task, update the file and wait for user approval
+   
