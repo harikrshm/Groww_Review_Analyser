@@ -28,6 +28,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       
+      - name: Create data directories
+        run: |
+          mkdir -p data/raw
+          mkdir -p data/classified
+          mkdir -p data/reports/html
+          mkdir -p data/reports/json
+          mkdir -p data/reports/graphs
+          echo "✓ Data directories created"
+      
       - name: Validate required secrets
         run: |
           if [ -z "${{ secrets.SENDGRID_API_KEY }}" ]; then
@@ -66,12 +75,18 @@ jobs:
         env:
           SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          PYTHONUNBUFFERED: 1  # Ensure Python output is not buffered
         run: |
           echo "🚀 Running full pipeline: scrape → classify → summarize → email"
+          echo "📅 Date range: ${{ steps.dates.outputs.START_DATE }} to ${{ steps.dates.outputs.END_DATE }}"
+          echo ""
           python -m src.main run \
             --start-date ${{ steps.dates.outputs.START_DATE }} \
             --end-date ${{ steps.dates.outputs.END_DATE }} \
-            --send-email
+            --send-email 2>&1 | tee pipeline.log
+          echo ""
+          echo "📋 Pipeline execution log:"
+          tail -100 pipeline.log || true
       
       - name: Report status
         if: always()
