@@ -79,13 +79,13 @@ class RequestProcessor:
         reviews_path = Path(self.reviews_dir)
         if not reviews_path.exists():
             logger.warning(f"Reviews directory does not exist: {self.reviews_dir}")
-            return None
+            raise ValueError(f"Reviews directory does not exist: {self.reviews_dir}")
         
         # Find all review files
         review_files = list(reviews_path.glob("reviews_*.json"))
         if not review_files:
             logger.warning(f"No review files found in {self.reviews_dir}")
-            return None
+            raise ValueError(f"No review files found in {self.reviews_dir}")
         
         # If target week is specified, find a file that contains it
         if target_week:
@@ -221,9 +221,13 @@ class RequestProcessor:
             phase1_pipeline = Phase1Pipeline()
             output_path = Path(self.reviews_dir) / f"reviews_{datetime.now().strftime('%Y-%m-%d')}.json"
             
+            # Ensure output directory exists
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            
             # Run scraping (this will scrape the last N weeks from today)
             logger.info("🔄 Running scraper to get latest reviews...")
-            scraping_output = phase1_pipeline.run(output_file=str(output_path))
+            logger.info(f"📁 Output will be saved to: {output_path}")
+            scraping_output = phase1_pipeline.run(output_path=str(output_path))
             
             logger.info(f"✅ Scraped {len(scraping_output.reviews)} reviews successfully")
             logger.info(f"📁 Saved to: {output_path}")
@@ -329,9 +333,14 @@ class RequestProcessor:
         
         try:
             reviews_file = self._find_reviews_file(target_week=week_id)
-            logger.info(f"✅ Found existing reviews file: {reviews_file}")
+            if reviews_file:
+                logger.info(f"✅ Found existing reviews file: {reviews_file}")
+            else:
+                logger.warning("⚠️  No review files found in directory")
+                # No files exist - trigger scraping
+                raise ValueError("No review files found in data/raw directory")
         except ValueError as e:
-            # Week not found in existing files - try scraping
+            # Week not found in existing files OR no files exist - try scraping
             logger.warning(f"⚠️  {str(e)}")
             logger.info("🔄 No existing reviews file found for this week")
             logger.info("🔄 Attempting to scrape fresh reviews for the requested period...")
