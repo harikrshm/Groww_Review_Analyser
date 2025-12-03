@@ -233,9 +233,22 @@ class RequestProcessor:
             logger.info(f"📁 Saved to: {output_path}")
             
             # Verify the scraped file contains the requested week
+            # Convert RawReview objects to dicts for cluster_by_week
             from src.phase2_classification.week_clusterer import WeekClusterer
             clusterer = WeekClusterer()
-            week_clusters = clusterer.cluster_by_week(scraping_output.reviews, target_weeks=[week_id])
+            
+            # Convert RawReview objects to dicts
+            reviews_as_dicts = []
+            for review in scraping_output.reviews:
+                # Convert Pydantic model to dict
+                review_dict = review.model_dump(mode='json')
+                # Ensure timestamp is datetime object (not string)
+                if isinstance(review_dict.get('timestamp'), str):
+                    from datetime import datetime
+                    review_dict['timestamp'] = datetime.fromisoformat(review_dict['timestamp'])
+                reviews_as_dicts.append(review_dict)
+            
+            week_clusters = clusterer.cluster_by_week(reviews_as_dicts, target_weeks=[week_id])
             
             if week_id in week_clusters and len(week_clusters[week_id]) > 0:
                 logger.info(f"✅ Confirmed: Scraped file contains {len(week_clusters[week_id])} reviews for week {week_id}")
