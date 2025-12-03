@@ -335,6 +335,67 @@ def list_weeks(
 
 
 @app.command()
+def send_latest(
+    dry_run: bool = typer.Option(False, "--dry-run", help="Generate email but don't send"),
+    force: bool = typer.Option(False, "--force", "-f", help="Send without confirmation prompt"),
+):
+    """Send report email for the latest available week (automated scheduler use)."""
+    from src.phase4_email.scheduler import EmailScheduler
+    
+    console.print("[bold blue]Finding latest week and sending report...[/bold blue]")
+    
+    try:
+        # Use scheduler's logic to find latest week
+        scheduler = EmailScheduler()
+        data = scheduler._get_latest_week_data()
+        
+        if not data:
+            console.print("[red]Error: Could not find latest week data. No reports available to send.[/red]")
+            console.print("[yellow]Hint: Run 'generate' command first to create reports[/yellow]")
+            raise typer.Exit(1)
+        
+        week_id, clusters_report_path, raw_reviews_path = data
+        console.print(f"[green]Found latest week: {week_id}[/green]")
+        console.print(f"[dim]Clusters report: {clusters_report_path}[/dim]")
+        console.print(f"[dim]Raw reviews: {raw_reviews_path}[/dim]")
+        
+        # Show email details
+        console.print(f"\n[bold]Email Details:[/bold]")
+        console.print(f"  Week: {week_id}")
+        console.print(f"  Recipients: {', '.join(scheduler.pipeline.stakeholders)}")
+        console.print(f"  Mode: {'DRY RUN' if dry_run else 'SEND'}")
+        
+        # Confirmation prompt (unless force or dry-run)
+        if not dry_run and not force:
+            if not Confirm.ask("\n[bold yellow]Send email?[/bold yellow]", default=False):
+                console.print("[yellow]Cancelled[/yellow]")
+                raise typer.Exit(0)
+        
+        # Send email
+        success, error = scheduler.pipeline.send_weekly_report(
+            week_id=week_id,
+            clusters_report_path=clusters_report_path,
+            raw_reviews_path=raw_reviews_path,
+            dry_run=dry_run
+        )
+        
+        if success:
+            if dry_run:
+                console.print(f"\n[bold green]✓ Dry run successful! Email would be sent.[/bold green]")
+            else:
+                console.print(f"\n[bold green]✓ Email sent successfully![/bold green]")
+        else:
+            console.print(f"\n[bold red]✗ Email send failed: {error}[/bold red]")
+            raise typer.Exit(1)
+            
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        import traceback
+        console.print(f"[red]{traceback.format_exc()}[/red]")
+        raise typer.Exit(1)
+
+
+@app.command()
 def check_email(
     config: str = typer.Option("config/inbound_email.json", "--config", "-c", help="Path to inbound email config file"),
 ):
