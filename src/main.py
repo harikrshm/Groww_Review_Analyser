@@ -268,8 +268,28 @@ def run(
             for week_id in weeks:
                 console.print(f"  Sending report for {week_id}...", end=" ")
                 try:
+                    # Find the cluster report file for this week
+                    classified_dir = Path(output_dir)
+                    insight_file = classified_dir / f"insights_{week_id}_report.json"
+                    review_file = classified_dir / f"clusters_{week_id}_report.json"
+                    
+                    if insight_file.exists():
+                        clusters_report_path = str(insight_file)
+                    elif review_file.exists():
+                        clusters_report_path = str(review_file)
+                    else:
+                        console.print(f"[red]✗ No cluster report found for {week_id}[/red]")
+                        continue
+                    
+                    # Use the reviews file from Phase 1
+                    if not reviews_file:
+                        console.print(f"[red]✗ No reviews file available[/red]")
+                        continue
+                    
                     success, error = phase4_pipeline.send_weekly_report(
                         week_id=week_id,
+                        clusters_report_path=clusters_report_path,
+                        raw_reviews_path=reviews_file,
                         dry_run=dry_run
                     )
                     if success:

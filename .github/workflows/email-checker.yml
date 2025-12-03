@@ -2,7 +2,7 @@ name: Email Checker (Scheduled Polling)
 
 on:
   schedule:
-    # Run every 10 minutes
+    # Run every 1 minute for testing
     # Cron format: minute hour day month day-of-week
     - cron: '*/1 * * * *'
   workflow_dispatch:  # Allow manual triggering
