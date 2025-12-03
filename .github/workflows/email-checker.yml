@@ -4,7 +4,7 @@ on:
   schedule:
     # Run every 10 minutes
     # Cron format: minute hour day month day-of-week
-    - cron: '*/10 * * * *'
+    - cron: '*/1 * * * *'
   workflow_dispatch:  # Allow manual triggering
 
 jobs:
