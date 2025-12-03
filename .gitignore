@@ -80,7 +80,9 @@ en_core_web_sm/
 en_core_web_lg/
 
 # Data files (keep structure, ignore contents)
-data/raw/*.json
+# Allow review files to be committed (needed for GitHub Actions)
+# data/raw/*.json  # Commented out - we want to commit review files
+data/raw/*.db  # Ignore database files
 data/classified/*.json
 data/reports/json/*.json
 data/reports/graphs/*.png
