@@ -1,0 +1,63 @@
+name: Email Checker (Scheduled Polling)
+
+on:
+  schedule:
+    # Run every 10 minutes
+    # Cron format: minute hour day month day-of-week
+    - cron: '*/10 * * * *'
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  check-email:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Validate required secrets
+        run: |
+          if [ -z "${{ secrets.EMAIL_PASSWORD }}" ]; then
+            echo "Error: EMAIL_PASSWORD secret is not set"
+            exit 1
+          fi
+          if [ -z "${{ secrets.GROQ_API_KEY }}" ]; then
+            echo "Error: GROQ_API_KEY secret is not set"
+            exit 1
+          fi
+          if [ -z "${{ secrets.SENDGRID_API_KEY }}" ]; then
+            echo "Error: SENDGRID_API_KEY secret is not set"
+            exit 1
+          fi
+          echo "✓ All required secrets are set"
+      
+      - name: Check email inbox
+        env:
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+        run: |
+          python -m src.cli check-email
+      
+      - name: Report status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ Email check completed"
+          else
+            echo "❌ Email check failed"
+            # Don't exit with error - allow workflow to continue even if no emails found
+          fi
+
