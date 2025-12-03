@@ -1,5 +1,8 @@
 # Review Analyser
 
+<img width="1000" height="1640" alt="image" src="https://github.com/user-attachments/assets/2d6ed367-5b33-4e7f-ac2b-f4164a784004" />
+
+
 Automated review analysis tool that scrapes, classifies, and summarizes app reviews from Google Play Store (Currently for Groww), then sends actionable insights via email. Features a multi-theme insight extraction pipeline with support for custom themes via CLI, email, or configuration.
 
 ## Features
