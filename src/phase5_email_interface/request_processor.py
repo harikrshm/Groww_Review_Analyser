@@ -78,20 +78,52 @@ class RequestProcessor:
         """
         reviews_path = Path(self.reviews_dir)
         if not reviews_path.exists():
+            logger.warning(f"Reviews directory does not exist: {self.reviews_dir}")
             return None
         
         # Find all review files
         review_files = list(reviews_path.glob("reviews_*.json"))
         if not review_files:
+            logger.warning(f"No review files found in {self.reviews_dir}")
             return None
         
         # If target week is specified, find a file that contains it
         if target_week:
-            from src.phase2_classification.week_clusterer import WeekClusterer
+            logger.info(f"Searching for week {target_week} in {len(review_files)} review file(s)...")
             
+            # First, try quick check using metadata (faster)
+            for review_file in sorted(review_files, key=lambda p: p.stat().st_mtime, reverse=True):
+                try:
+                    with open(review_file, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    
+                    # Quick check: Look in metadata statistics first
+                    stats = data.get("statistics", {})
+                    by_week = stats.get("by_week", {})
+                    
+                    if target_week in by_week and by_week[target_week] > 0:
+                        logger.info(f"✅ Found week {target_week} in {review_file.name} (metadata shows {by_week[target_week]} reviews)")
+                        # Verify by actually checking reviews
+                        all_reviews = data.get("reviews", [])
+                        if all_reviews:
+                            from src.phase2_classification.week_clusterer import WeekClusterer
+                            clusterer = WeekClusterer()
+                            week_clusters = clusterer.cluster_by_week(all_reviews, target_weeks=[target_week])
+                            if target_week in week_clusters and len(week_clusters[target_week]) > 0:
+                                logger.info(f"✅ Verified: {review_file.name} contains {len(week_clusters[target_week])} reviews for {target_week}")
+                                return str(review_file)
+                            else:
+                                logger.warning(f"⚠️  Metadata says {target_week} exists but actual reviews not found in {review_file.name}")
+                    
+                except Exception as e:
+                    logger.warning(f"Error checking metadata in {review_file.name}: {e}")
+                    continue
+            
+            # If metadata check didn't work, do full review check
+            logger.info("Metadata check didn't find week, doing full review check...")
+            from src.phase2_classification.week_clusterer import WeekClusterer
             clusterer = WeekClusterer()
             
-            # Check each file for the target week
             for review_file in sorted(review_files, key=lambda p: p.stat().st_mtime, reverse=True):
                 try:
                     with open(review_file, 'r', encoding='utf-8') as f:
@@ -99,6 +131,7 @@ class RequestProcessor:
                     
                     all_reviews = data.get("reviews", [])
                     if not all_reviews:
+                        logger.debug(f"  {review_file.name}: No reviews in file")
                         continue
                     
                     # Check if this file has reviews for target week
@@ -125,26 +158,24 @@ class RequestProcessor:
             logger.error(f"⚠️  No file found containing reviews for requested week: {target_week}")
             logger.error(f"Available review files: {[f.name for f in sorted(review_files, key=lambda p: p.stat().st_mtime, reverse=True)]}")
             
-            # Check what weeks ARE available in the files
-            logger.info("Checking available weeks in all review files...")
-            from src.phase2_classification.week_clusterer import WeekClusterer
-            clusterer = WeekClusterer()
+            # Check what weeks ARE available in the files (using metadata for speed)
+            logger.info("Checking available weeks in all review files (from metadata)...")
             for review_file in sorted(review_files, key=lambda p: p.stat().st_mtime, reverse=True):
                 try:
                     with open(review_file, 'r', encoding='utf-8') as f:
                         data = json.load(f)
-                    all_reviews = data.get("reviews", [])
-                    if all_reviews:
-                        all_weeks = clusterer.cluster_by_week(all_reviews, target_weeks=None)
-                        weeks_list = sorted(all_weeks.keys())
-                        logger.info(f"  {review_file.name}: Weeks {weeks_list[0]} to {weeks_list[-1]} ({len(weeks_list)} weeks)")
-                except Exception:
-                    pass
+                    stats = data.get("statistics", {})
+                    by_week = stats.get("by_week", {})
+                    if by_week:
+                        weeks_list = sorted(by_week.keys())
+                        logger.info(f"  {review_file.name}: Weeks {weeks_list[0]} to {weeks_list[-1]} ({len(weeks_list)} weeks, {sum(by_week.values())} total reviews)")
+                except Exception as e:
+                    logger.debug(f"  Error reading {review_file.name}: {e}")
             
-            # Don't silently fallback - raise an error so user knows the requested week isn't available
+            # Raise ValueError to trigger scraping
             raise ValueError(
                 f"Requested week {target_week} not found in any review files. "
-                f"Please check the logs above for available weeks, or the date extraction may have failed."
+                f"Check logs above for available weeks. Will attempt to scrape."
             )
         
         # Fallback: Get most recent file (only if target_week was None - meaning no specific week requested)
