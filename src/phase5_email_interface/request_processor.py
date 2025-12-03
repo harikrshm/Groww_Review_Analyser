@@ -213,7 +213,10 @@ class RequestProcessor:
         except Exception as e:
             logger.error(f"❌ Scraping failed: {e}")
             import traceback
-            logger.debug(traceback.format_exc())
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            # Log more details about the error
+            logger.error(f"Error type: {type(e).__name__}")
+            logger.error(f"Error message: {str(e)}")
             return None
     
     def process_request(self, request: AnalysisRequest) -> AnalysisResponse:
@@ -291,19 +294,37 @@ class RequestProcessor:
         
         # Find reviews file that contains the target week
         logger.info(f"🔍 Looking for reviews file containing week: {week_id}")
+        reviews_file = None
+        
         try:
             reviews_file = self._find_reviews_file(target_week=week_id)
+            logger.info(f"✅ Found existing reviews file: {reviews_file}")
         except ValueError as e:
             # Week not found in existing files - try scraping
             logger.warning(f"⚠️  {str(e)}")
+            logger.info("🔄 No existing reviews file found for this week")
             logger.info("🔄 Attempting to scrape fresh reviews for the requested period...")
-            reviews_file = self._scrape_if_needed(week_id, extracted_period)
             
-            if not reviews_file:
+            try:
+                reviews_file = self._scrape_if_needed(week_id, extracted_period)
+                
+                if not reviews_file:
+                    logger.error("❌ Scraping returned None - scraping may have failed")
+                    raise FileNotFoundError(
+                        f"Could not find or scrape reviews for week {week_id}. "
+                        f"Scraping was attempted but failed. Check logs above for scraping errors. "
+                        f"The requested week may not be available in scraped data."
+                    )
+                else:
+                    logger.info(f"✅ Successfully scraped reviews file: {reviews_file}")
+            except Exception as scrape_error:
+                logger.error(f"❌ Scraping exception: {scrape_error}")
+                import traceback
+                logger.error(f"Scraping traceback: {traceback.format_exc()}")
                 raise FileNotFoundError(
                     f"Could not find or scrape reviews for week {week_id}. "
-                    f"The requested week may not be available in scraped data. "
-                    f"Available weeks in files: Check logs above for details."
+                    f"Scraping failed with error: {str(scrape_error)}. "
+                    f"Check logs above for details."
                 )
         
         if not reviews_file:

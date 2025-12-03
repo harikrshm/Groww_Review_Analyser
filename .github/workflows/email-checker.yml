@@ -10,7 +10,7 @@ on:
 jobs:
   check-email:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 30  # Increased timeout to allow scraping + processing
     
     steps:
       - name: Checkout repository
@@ -56,6 +56,11 @@ jobs:
             echo '{"processed_uids": [], "last_updated": "", "total_count": 0}' > data/phase5/processed_emails.json
           fi
           echo "✓ All data directories created"
+          echo "📁 Directory structure:"
+          ls -la data/ || true
+          echo ""
+          echo "📁 Review files in data/raw:"
+          ls -la data/raw/ || echo "  (no files yet - will be created when scraping)"
       
       - name: Check email inbox
         id: check_email
