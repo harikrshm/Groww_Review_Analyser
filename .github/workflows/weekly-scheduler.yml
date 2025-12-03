@@ -11,7 +11,7 @@ on:
 jobs:
   send-weekly-report:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60  # Increased timeout for full pipeline execution
     
     steps:
       - name: Checkout repository
@@ -40,12 +40,38 @@ jobs:
           fi
           echo "✓ All required secrets are set"
       
-      - name: Send weekly report
+      - name: Calculate date range for last week
+        id: dates
+        run: |
+          # Calculate last week's date range (7 days ago to today) using Python
+          python3 << 'EOF'
+          from datetime import datetime, timedelta
+          import os
+          
+          end_date = datetime.utcnow()
+          start_date = end_date - timedelta(days=7)
+          
+          start_str = start_date.strftime('%Y-%m-%d')
+          end_str = end_date.strftime('%Y-%m-%d')
+          
+          # Write to GitHub output
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"START_DATE={start_str}\n")
+              f.write(f"END_DATE={end_str}\n")
+          
+          print(f"📅 Date range: {start_str} to {end_str}")
+          EOF
+      
+      - name: Generate and send weekly report
         env:
           SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
-          python -m src.cli send-latest --force
+          echo "🚀 Running full pipeline: scrape → classify → summarize → email"
+          python -m src.main run \
+            --start-date ${{ steps.dates.outputs.START_DATE }} \
+            --end-date ${{ steps.dates.outputs.END_DATE }} \
+            --send-email
       
       - name: Report status
         if: always()
