@@ -43,21 +43,57 @@ jobs:
           fi
           echo "✓ All required secrets are set"
       
+      - name: Create data directories
+        run: |
+          mkdir -p data/phase5
+          touch data/phase5/processed_emails.json
+          echo "{}" > data/phase5/processed_emails.json
+      
       - name: Check email inbox
         env:
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+          PYTHONUNBUFFERED: 1  # Ensure Python output is not buffered
         run: |
-          python -m src.cli check-email
+          echo "📧 Starting email check..."
+          echo "Email: harikrish656@gmail.com"
+          echo "Subject filter: [ANALYZE]"
+          echo "IMAP server: imap.gmail.com:993"
+          echo "IMAP folder: INBOX"
+          echo ""
+          echo "⚠️  IMPORTANT: Email must have:"
+          echo "   1. Subject containing '[ANALYZE]' (exact match)"
+          echo "   2. Status: UNSEEN (unread)"
+          echo "   3. Sender must be in authorized list: harikrish656@gmail.com"
+          echo ""
+          python -m src.cli check-email 2>&1 | tee email_check.log
+          echo ""
+          echo "📋 Full email check log:"
+          cat email_check.log || true
       
       - name: Report status
         if: always()
         run: |
-          if [ "${{ job.status }}" == "success" ]; then
-            echo "✅ Email check completed"
-          else
-            echo "❌ Email check failed"
-            # Don't exit with error - allow workflow to continue even if no emails found
+          echo "=========================================="
+          echo "Email Check Summary"
+          echo "=========================================="
+          if [ -f email_check.log ]; then
+            echo "Last 50 lines of email check log:"
+            tail -50 email_check.log || true
           fi
+          echo ""
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ Email check completed successfully"
+          else
+            echo "❌ Email check encountered an error"
+            echo ""
+            echo "Common issues:"
+            echo "1. Check if EMAIL_PASSWORD secret is set correctly (Gmail App Password)"
+            echo "2. Verify email subject contains '[ANALYZE]' exactly"
+            echo "3. Ensure email is unread (UNSEEN)"
+            echo "4. Check IMAP access is enabled in Gmail settings"
+            echo "5. Verify sender email is in authorized_senders list"
+          fi
+          echo "=========================================="
 
